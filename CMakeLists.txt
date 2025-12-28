@@ -19,7 +19,7 @@ include_directories(/opt/homebrew/opt/openssl@3/include)
 link_directories(/opt/homebrew/opt/openssl@3/lib)
 
 # Add executable
-add_executable(atlas_server main.cpp database.cpp messaging.cpp server.cpp invites.cpp cenv.cpp)
+add_executable(atlas_server main.cpp database.cpp messaging.cpp server.cpp invites.cpp)
 
 # Link libraries
 target_link_libraries(atlas_server

@@ -32,7 +32,10 @@ namespace ssl = boost::asio::ssl;
 using tcp = net::ip::tcp;
 using json = nlohmann::json;
 
-std::string secret = clang_env::find_token("secrets", "securekey");
+cenvxx clangxx;
+auto cenv = clangxx.init("../secrets/cenv");
+
+std::string secret = cenv.find_token("secrets", "securekey");
 
 // -------------------------
 // Global session manager
@@ -247,7 +250,7 @@ int discord_sendM(const std::string username, const std::string message) {
     try {
         const std::string host = "discord.com";
         const std::string port = "443";
-        std::string target = clang_env::find_token("hooks", "webhook_key");
+        std::string target = cenv.find_token("hooks", "webhook_key");
             
         int version = 11; // HTTP/1.1
 
@@ -721,7 +724,7 @@ int ping_server() {
     try {
         const std::string host = "discord.com";
         const std::string port = "443";
-        std::string target = clang_env::find_token("hooks", "webhook_key");
+        std::string target = cenv.find_token("hooks", "webhook_key");
             
         int version = 11; // HTTP/1.1
 
@@ -782,6 +785,8 @@ int main(int argc, char* argv[]) {
     if (argc > 1 && std::string(argv[1]) == "--notify") {
         ping_server();
     }
+
+    std::cout << secret << "\n";
 
     std::map<std::string, HttpRoute> routes;
 

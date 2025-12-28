@@ -1,6 +1,6 @@
 interface Globals {
     url_string: {
-        scheme: ("http" | "https")
+        scheme: ("http" | "https" | "ws" | "wss")
         port: (number | undefined)
         top_level_domain: string
         second_level_domain: string

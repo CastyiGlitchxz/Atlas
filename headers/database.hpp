@@ -11,10 +11,13 @@ private:
 };
 
 inline Database connect_db() {
-    std::string dbname = clang_env::find_token("database", "dbname");
-    std::string user = clang_env::find_token("database", "user");
-    std::string password = clang_env::find_token("database", "password");
-    std::string host = clang_env::find_token("database", "host");
+    cenvxx clangxx;
+    auto cenv = clangxx.init("../secrets/cenv");
+
+    std::string dbname = cenv.find_token("database", "dbname");
+    std::string user = cenv.find_token("database", "user");
+    std::string password = cenv.find_token("database", "password");
+    std::string host = cenv.find_token("database", "host");
 
     std::string conn_str = "dbname=" + dbname + " user=" + user + " password=" + password + " host=" + host;
     Database db(conn_str);
