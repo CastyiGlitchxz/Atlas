@@ -1,0 +1,8 @@
+C++ wont work for me(mac issue)
+
+2 RUN!
+-----------
+npm run dev
+npm start
+npx next start
+-----------
