@@ -44,7 +44,6 @@ json server_get_all_users(const std::string server_id) {
             response["status"] = 200;
         };
 
-
     } catch (std::exception &e) {
         std::cout << e.what() << "\n";
         response["what"] = e.what();
@@ -102,6 +101,7 @@ json join_server(const std::string server_id, const std::string UUID) {
             {"name", get_server(sid)["server"].value("server_name", "")},
             {"owner", get_server(sid)["server"].value("owner", "")},
             {"serverID", sid},
+            {"response", "success"}
         };
     } catch (const pqxx::unique_violation) {
         response["server"] = {

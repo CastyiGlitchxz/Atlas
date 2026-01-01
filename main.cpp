@@ -598,10 +598,7 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
             http::response<http::string_body> res{http::status::unauthorized, req.version()};
             std::string token = data.value("token", "");
 
-            auto decoded = jwt::decode(token);
-            jwt::verify().allow_algorithm(jwt::algorithm::hs256{secret}).verify(decoded);
-            
-            std::string user_id = decoded.get_subject();
+            std::string user_id = decode_token(token);
             std::string sid = data.value("sid", "");
 
             json sres = join_server(sid, user_id);

@@ -6,6 +6,7 @@ import styles from "../../stylesheets/css/settings.module.css";
 import { Account, Profile } from "../../typescript/interfaces";
 import { useRouter } from "next/navigation";
 import { Tab, Tabs } from "../components";
+import { getWebSocket } from "../../typescript/websocket";
 
 export default function SettingsPage() {
     const router = useRouter();
@@ -72,8 +73,8 @@ export default function SettingsPage() {
     const wsRef = useRef<WebSocket | null>(null);
 
     const connectWS = () => {
+        const ws = getWebSocket();
         if (wsRef.current) return;
-        const ws = new WebSocket(`ws://${globals.url_string.subdomain}:8080`);
         ws.binaryType = "arraybuffer"; // important for binary
         ws.onopen = () => console.log("WebSocket connected");
         ws.onmessage = (msg) => console.log("Server says:", msg.data);

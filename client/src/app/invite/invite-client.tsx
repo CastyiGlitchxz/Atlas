@@ -33,7 +33,6 @@ export default function Invite() {
 
             switch(event) {
                 case "invite":
-
                     if (!data.failed) {
                         setServer({
                             issuer: data.issued_by,
@@ -48,7 +47,7 @@ export default function Invite() {
                     break;
 
                 case "server_response":
-                    if (data.response === "success") {
+                    if (data.server.response === "success") {
                         router.replace("/bubble");
                     }
                     break;
@@ -71,7 +70,7 @@ export default function Invite() {
     return (
         <div className={styles.main}>
             <div className={styles.topLink}>
-                <p>http://{globals.url_string.subdomain}:80/invite?code={code}</p>
+                <p>{globals.url_string.scheme}://{globals.url_string.subdomain}/invite?code={code}</p>
             </div>
             <div className={styles.invite_prompt}>
                 <div className={styles.serverIcon}>
