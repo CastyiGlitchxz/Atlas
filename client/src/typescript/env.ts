@@ -5,6 +5,9 @@ interface Globals {
         top_level_domain: string
         second_level_domain: string
         subdomain: string
+    },
+    websockets: {
+        scheme: ("ws" | "wss")
     }
 }
 
@@ -15,6 +18,9 @@ export const globals: Readonly<Globals> = {
         top_level_domain: "",
         second_level_domain: "",
         port: 8080
+    },
+    websockets: {
+        scheme: "ws"
     }
 };
 

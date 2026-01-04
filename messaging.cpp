@@ -1,5 +1,6 @@
 #include "headers/database.hpp"
 #include "headers/messaging.hpp"
+#include <cstddef>
 #include <iomanip>
 #include <iostream>
 #include <optional>
@@ -69,9 +70,10 @@ json get_user_by_UUID(const std::string& UUID) {
 
 json get_user_all(const std::string& UUID);
 
-json get_messages(const std::string serverID) {
+json get_messages(const std::string serverID, std::optional<int> index) {
     json result;
     std::vector<Message> messages;
+    int messageLimit = 25;
 
     try {
         Database db = connect_db();
@@ -79,19 +81,33 @@ json get_messages(const std::string serverID) {
 
         pqxx::nontransaction txn(conn);
 
-        pqxx::result r = txn.exec(
-            "SELECT id, server_id, user_id, content, timestamp, message_ref, link "
-            "FROM messages WHERE server_id = " + txn.quote(serverID) +
-            " ORDER BY timestamp ASC;"
-        );
+        pqxx::result r_init;
 
-        std::tm tm = parseTimestamp(r[0]["timestamp"].as<std::string>());
+        if (!index.has_value()) {
+            r_init = txn.exec(
+                "SELECT id, server_id, user_id, content, timestamp, message_ref, link "
+                "FROM messages WHERE server_id = " + txn.quote(serverID) +
+                " ORDER BY id DESC LIMIT " + txn.quote(messageLimit) + ";"
+            );
+        } else {
+            r_init = txn.exec(
+                "SELECT id, server_id, user_id, content, timestamp, message_ref, link "
+                "FROM messages WHERE server_id = " + txn.quote(serverID) +
+                "AND id < " + txn.quote(index) +
+                " ORDER BY id DESC LIMIT " + txn.quote(messageLimit) + ";"
+            );
+        }
+        
+
+        messages.reserve(r_init.size());
+
+        std::tm tm = parseTimestamp(r_init[0]["timestamp"].as<std::string>());
 
         std::ostringstream oss;
         oss << std::put_time(&tm, "%I:%M %p"); // 12-hour with AM/PM
         std::string time12h = oss.str();
 
-        for (auto row : r) {
+        for (auto row : r_init) {
             std::optional<int> message_ref = row["message_ref"].as<std::optional<int>>();
             std::optional<std::string> link = row["link"].as<std::optional<std::string>>();
 
@@ -99,13 +115,15 @@ json get_messages(const std::string serverID) {
                 row["id"].as<int>(),
                 row["server_id"].as<std::string>(),
                 row["user_id"].as<std::string>(),
-                row["content"].c_str(),
+                row["content"].as<std::string>(),
                 time12h,
                 message_ref,
                 link
             };
             messages.push_back(msg);
         }
+
+        std::reverse(messages.begin(), messages.end());
 
         result["success"] = true;
         result["messages"] = json::array();

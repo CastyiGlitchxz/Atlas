@@ -15,6 +15,11 @@ export class eventManager {
     }
 
     public emitEvent(targetEvent: string, data?: unknown) {
+        if (!this.ws || this.ws.readyState !== this.ws.OPEN) {
+            console.log("Websockets not ready");
+            return;
+        }
+
         this.ws.send(JSON.stringify({
             event: targetEvent,
             data: data,

@@ -1,7 +1,7 @@
 'use client'
+import React, { createContext, Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { useRouter } from "next/navigation";
-import { createContext, Dispatch, SetStateAction, useEffect, useState } from "react";
 import { get_token } from "../../typescript/user";
 import { construct_path } from "../../typescript/env";
 import styles from "../../stylesheets/css/chat.module.css";
@@ -28,12 +28,38 @@ const geistMono = Geist_Mono({
     subsets: ["latin"],
 });
 
+function find_server(inviteCode: string) {
+    const em = new eventManager();
+
+    em.emitEvent("verify_invite", { "code": inviteCode });
+};
+
+function join_server(serverID: string) {
+    const em = new eventManager();
+
+    const token = get_token();
+    em.emitEvent("join_server", { "token": token, sid: serverID });
+};
+
 export default function RootLayout({
     children,
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const em = new eventManager();
+    const emRef = useRef<eventManager | null>(null);
+    const tokenRef = useRef<string | null>(null);
+
+    if (!emRef.current) {
+        emRef.current = new eventManager();
+    }
+
+    if (!tokenRef.current) {
+        tokenRef.current = get_token();
+    }
+
+    const em = emRef.current;
+    const token = tokenRef.current;
+
     const router = useRouter();
     const [selectedTab, setSelectedTab] = useState(0);
     const [serverList, setServerList] = useState<serverFormat[]>([]);
@@ -62,24 +88,38 @@ export default function RootLayout({
         router.push(`/bubble/server/${serverID}`);
     };
 
-    function find_server(inviteCode: string) {
-        em.emitEvent("verify_invite", { "code": inviteCode });
-    };
-    
-    function join_server(serverID: string) {
-        const token = get_token();
-        em.emitEvent("join_server", { "token": token, sid: serverID });
-    };
-
     function create_server() {
         const token = get_token();
         em.emitEvent("create_server", { "auth": token, server_name: server.name });
     };
 
     useEffect(() => {
-        async function get_servers() {
-            const token = get_token();
-            
+        em.emitEvent("update_status", { auth: token, status: "online" });
+    }, []);
+
+    useEffect(() => {
+        document.onfocus = function() {
+            setTimeout(() => {
+                em.emitEvent("update_status", { auth: token, status: "online" });
+            }, 1000);
+        };
+        
+        document.onblur = function() {
+            setTimeout(() => {
+                em.emitEvent("update_status", { auth: token, status: "idle" });
+            }, 1000);
+        };
+    }, []);
+    
+    useEffect(() => {
+
+        window.onbeforeunload = function() {
+            em.emitEvent("update_status", { auth: token, status: "offline" });
+        }
+    });
+
+    useEffect(() => {
+        (async () => {
             const res = await fetch(construct_path("api/servers/get"), {
                 method: "POST",
                 headers: {
@@ -91,15 +131,27 @@ export default function RootLayout({
             const data = await res.json();
 
             setServerList(data.servers.server);
-        }
-        get_servers();
+        })();
     }, []);
 
     useEffect(() => {
         const ws = getWebSocket();
 
-        ws.onmessage = (msg) => {
+        const newNotification = (data) => {
+            const notification = new Notification(`Message from ${data.sender.displayName}`, {
+                body: data.sender.message,
+                icon: data.sender.picture,
+            });
+
+            notification.onclick = function() {
+                router.push(`/bubble/server/${data.serverID}`);
+            };
+        }
+
+        const handler = (msg: MessageEvent) => {
             const {event, data} = JSON.parse(msg.data);
+            
+            const server: serverFormat = data.server;
 
             switch(event) {
                 case "invite":
@@ -115,20 +167,27 @@ export default function RootLayout({
                     break;
 
                 case "server_response":
-                    const server: serverFormat = data.server;
                     setServerList(prev => [
                         ...prev,
                         server
                     ]);
                     break;
 
-                default:
+                case "notification":
+                    // if (!data.sender.token || sameChat || document.hasFocus() && sameChat) break;
+                    if (!data.sender || data.sender.token === token) break;
+                    newNotification(data);
                     break;
-            }
-        }
+                    
+                    default:
+                        break;
+                    }
+                }
+
+        ws.addEventListener("message", handler);
+        
         return () => {
-            ws.onmessage = null;
-            ws.onopen = null;
+            ws.removeEventListener("message", handler);
         };
     }, []);
 

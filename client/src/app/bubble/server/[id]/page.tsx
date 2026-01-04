@@ -1,6 +1,6 @@
 'use client'
 import { getWebSocket } from "../../../../typescript/websocket";
-import { use, useState, useEffect, JSX , useRef, useContext} from "react"
+import React, { use, useState, useEffect, JSX , useRef, useContext} from "react"
 import { eventManager } from "../../../../typescript/eventsManager";
 import { construct_path, globals } from "../../../../typescript/env";
 import styles from "../../../../stylesheets/css/chat.module.css";
@@ -10,11 +10,33 @@ import { useRouter } from "next/navigation";
 import { ProfilePanel } from "../../layout";
 import Image from "next/image";
 import { messageFormat } from "../../../../typescript/interfaces";
+import { isSameChat, isHyperlink } from "../../../../typescript/chat";
+
+function delete_message(message_id: string) {
+    const em = new eventManager();
+
+    const token = get_token();
+    if (!token) return;
+
+    em.emitEvent("delete_message", { auth: token, message_id: message_id });
+};
 
 export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
     const { id } = use(params);
-    const em = new eventManager();
+    const emRef = useRef<eventManager | null>(null);
+    const tokenRef = useRef<string | null>(null);
+
+    if (!emRef.current) {
+        emRef.current = new eventManager();
+    }
+
+    if (!tokenRef.current) {
+        tokenRef.current = get_token();
+    }
+
+    const em = emRef.current;
+    const token = tokenRef.current;
 
     const sid: string = id;
 
@@ -30,6 +52,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     const [indicatorMessage, setIndicatorMessage] = useState<string>("");
     const [mid, setMid] = useState<number>(0);
     const [user, setUser] = useState<string>("");
+    const [pageIndex, setPageIndex] = useState<number>(null);
     const ctx = useContext(ProfilePanel);
     if (!ctx) {
         throw new Error("ProfilePanel must be used within a ProfilePanel.Provider");
@@ -38,37 +61,26 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     const { setPreview, setShowPreview } = ctx;
 
     useEffect(() => {
-        async function load_chat() {
+        (async () => {
             const res = await fetch(construct_path("api/messages_get"), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ "sid": sid }),
+                body: JSON.stringify({ sid: sid, index: pageIndex }),
             });
             const data = await res.json();
             const messages: messageFormat[] = data.messages.messages;
 
             setChatContent(messages);
-
-            const token = get_token();
-            em.emitEvent("update_status", { auth: token, status: "online" });
-
-            em.emitEvent("get_user", { token: token });
-        };
-
-        load_chat();
+        })();
     }, [sid]);
-
-    function isHyperlink(src: string) {
-        const check = src.match(/^(https|http)?:\/\/[a-zA-Z0-9.-]+(?:(?::[0-9]+)|\.(com|net|jpg|png|jpeg)\\[a-zA-Z0-9.-]+)/);
-        return check ? true : false;
-    };
-
-    function isSameChat(messageSID: string, sid: string): boolean {
-        if (messageSID !== sid) return false;
-        return true;
-    };
+    
+    useEffect(() => {
+        (async () => {
+            em.emitEvent("get_user", { token: token });
+        })();
+    }, [chatContent, user, sid]);
 
     function sendMessage(): void {
         if (message === "" || !message) return;
@@ -78,8 +90,6 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
             alert("WebSocket not ready");
             return;
         };
-
-        const token = get_token();
         
         switch (messageMode) {
             case "message":
@@ -110,7 +120,6 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     }
 
     function triggerNotification(content: string) {
-        const token = get_token();
         if (!("Notification" in window)) {
             return;
         };
@@ -120,14 +129,6 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     
     useEffect(() => {
         const ws = getWebSocket();
-        
-        ws.onopen = () => {
-            console.log("Connected!");
-            getWebSocket().send(JSON.stringify({
-                event: "message_sent",
-                data: { text: "Hello from client!" }
-            }));
-        };
     
         function update_userlist(userID: string, status: "online" | "offline" | "idle") {
             setUserList(prev => {
@@ -174,31 +175,16 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
             ]);
         };
 
-        ws.onmessage = (msg) => {
+        const handler = (msg: MessageEvent) => {
             const {event, data} = JSON.parse(msg.data);
+
+            const message: messageFormat = data;
 
             switch(event) {
                 case "message":
-                    const message: messageFormat = data;
                     
                     if (isSameChat(message.serverID, sid) === false) return;
                     addMessageToChat(message);
-                    break;
-
-                case "notification":
-                    const sameChat = isSameChat(data.serverID, sid) === true;
-                    if (!data.sender.token || sameChat || document.hasFocus() && sameChat) {
-                        break;
-                    }
-
-                    const notification = new Notification(`Message from ${data.sender.displayName}`, {
-                        body: data.sender.message,
-                        icon: data.sender.picture,
-                    });
-
-                    notification.onclick = function() {
-                        router.push(`/bubble/server/${data.serverID}`);
-                    };
                     break;
 
                 case "message_deleted":
@@ -227,22 +213,15 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                     break;
             };
         };
+
+        ws.addEventListener("message", handler);
         
         return () => {
-            ws.onmessage = null;
-            ws.onopen = null;
+            ws.removeEventListener("message", handler);
         };
     }, [sid, userList, router]);
 
-    function delete_message(message_id: string) {
-        const token = get_token();
-        if (!token) return;
-
-        em.emitEvent("delete_message", { auth: token, message_id: message_id });
-    };
-
     function edit_message(message_id: number, content: (string | JSX.Element)) {
-        const token = get_token();
         if (!token) return;   
         if (typeof content === "string") setMessage(content);
         
@@ -252,7 +231,6 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     };
 
     function reply_to_message(message_id: number, content: string) {
-        const token = get_token();
         if (!token) return;
         
         em.emitEvent("reply_to_message", { token: token, ref_id: message_id.toString(), content: content, sid: sid});
@@ -260,8 +238,8 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
         setMessageMode("message");
     };
 
-    useEffect(() => {
-        async function get_userlist() {    
+    useEffect(() => {       
+        (async () => {
             const res = await fetch(construct_path("api/servers/userlist_get"), {
                 method: "POST",
                 headers: {
@@ -277,9 +255,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                 online: online_users,
                 offline: offline_users
             });
-        };
-
-        get_userlist();
+        })();
     }, [sid]);
 
     useEffect(() => {
@@ -290,28 +266,53 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     }, [chatContent]);
 
     useEffect(() => {
-        const token = get_token();
-
-        document.onfocus = function() {
-            setTimeout(() => {
-                em.emitEvent("update_status", { auth: token, status: "online" });
-            }, 1000);
-        };
-        
-        document.onblur = function() {
-            setTimeout(() => {
-                em.emitEvent("update_status", { auth: token, status: "idle" });
-            }, 1000);
-        };
-    }, []);
+        if (chatContent && chatContent.length !== 0) {
+            setPageIndex(chatContent[0].id);
+        }
+    }, [chatContent]);
 
     useEffect(() => {
-        const token = get_token();
+        const container = chatRef.current;
+        if (!container) return;
+        
+        let loading = false;
+        
+        const handleScroll = async () => {
+            // Check if we are near the top
+            if (container.scrollTop <= 25 && !loading) {
+                loading = true;
+                
+                // Keep track of scroll height before fetching
+                const previousHeight = container.scrollHeight;
+                
+                try {
+                    const res = await fetch(construct_path("api/messages_get"), {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ sid: sid, index: pageIndex - 1 }) // load previous page
+                    });
+                    const data = await res.json();
+                    const newMessages: messageFormat[] = data.messages.messages;
 
-        window.onbeforeunload = function() {
-            em.emitEvent("update_status", { auth: token, status: "offline" });
-        }
-    });
+                    if (newMessages && newMessages.length > 0) {
+                        setChatContent(prev => [...newMessages, ...prev]);
+                        setPageIndex(prev => prev - 1);
+
+                        container.scrollTop = container.scrollHeight - previousHeight;
+                    }
+                } catch (err) {
+                    console.error("Failed to load previous messages:", err);
+                }
+
+                loading = false;
+            }
+        };
+
+        container.addEventListener("scroll", handleScroll);
+        return () => container.removeEventListener("scroll", handleScroll);
+    }, [sid, pageIndex]);
 
     useEffect(() => {
         if (!canvasRef.current) return;

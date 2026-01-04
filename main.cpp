@@ -504,7 +504,7 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
                 {"event", "notification"},
                 {"data", {
                     {"sender", {
-                        {"token", user_id},
+                        {"token", token},
                         {"displayName", displayname},
                         {"message", content},
                         {"picture", pfp}
@@ -713,7 +713,7 @@ json get_user(const std::string& username);
 
 void create_account(const std::string& username, const std::string& displayName, const std::string& password, const std::string& custom_status, const std::string& bio);
 bool login_user(std::string& username, std::string& password);
-json get_messages(const std::string serverID);
+json get_messages(const std::string serverID, std::optional<int> index);
 void update_account(const std::string& username, const std::string& displayname, const std::string& profile_picture, const std::string& custom_status, const std::string& bio, const std::string& UUID);
 json user_get_all_servers(const std::string& UUID);
 
@@ -926,10 +926,20 @@ int main(int argc, char* argv[]) {
             
             auto body_json = json::parse(body_str);
             std::string serverID = body_json["sid"];
-            
-            res.result(http::status::ok); 
+            std::optional<int> index;
 
-            auto messages = get_messages(serverID);
+            if (body_json.contains("index") && !body_json["index"].is_null()) {
+                if (body_json["index"].is_number_integer()) {
+                    index = body_json["index"].get<int>();
+                } else {
+                    std::cout << "Index is not an integer!\n";
+                }
+            }
+            
+            res.result(http::status::ok);
+
+            auto messages = get_messages(serverID, index);
+
             response_body["messages"] = messages;
             response_body["status"] = 200;
         } catch (const std::exception &e) {

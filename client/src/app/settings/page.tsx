@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useRef, useState } from "react"
-import { construct_path, globals } from "../../typescript/env";
+import React, { useEffect, useRef, useState } from "react"
+import { construct_path } from "../../typescript/env";
 import { get_token } from "../../typescript/user";
 import styles from "../../stylesheets/css/settings.module.css";
 import { Account, Profile } from "../../typescript/interfaces";
@@ -90,10 +90,10 @@ export default function SettingsPage() {
         if (!file || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
         // send raw binary
-        file.arrayBuffer().then((buffer) => {
-            // wsRef.current!.send(buffer);
-            // console.log("Sent profile image:", file.name, "Size:", buffer.byteLength);
-        });
+        // file.arrayBuffer().then((buffer) => {
+        //     wsRef.current!.send(buffer);
+        //     console.log("Sent profile image:", file.name, "Size:", buffer.byteLength);
+        // });
     };
 
     return (
@@ -128,6 +128,21 @@ export default function SettingsPage() {
                         <path d="M16 3a3 3 0 1 1-6 0 3 3 0 0 1 6 0"/>
                     </svg>
                     Notifications
+                </button>
+
+                <button onClick={() => setSelectedTab(3)}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-universal-access-circle" viewBox="0 0 16 16">
+                        <path d="M8 4.143A1.071 1.071 0 1 0 8 2a1.071 1.071 0 0 0 0 2.143m-4.668 1.47 3.24.316v2.5l-.323 4.585A.383.383 0 0 0 7 13.14l.826-4.017c.045-.18.301-.18.346 0L9 13.139a.383.383 0 0 0 .752-.125L9.43 8.43v-2.5l3.239-.316a.38.38 0 0 0-.047-.756H3.379a.38.38 0 0 0-.047.756Z"/>
+                        <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0M1 8a7 7 0 1 1 14 0A7 7 0 0 1 1 8"/>
+                    </svg>
+                    Accessibility
+                </button>
+
+                <button onClick={() => setSelectedTab(4)}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-sd-card-fill" viewBox="0 0 16 16">
+                        <path d="M12.5 0H5.914a1.5 1.5 0 0 0-1.06.44L2.439 2.853A1.5 1.5 0 0 0 2 3.914V14.5A1.5 1.5 0 0 0 3.5 16h9a1.5 1.5 0 0 0 1.5-1.5v-13A1.5 1.5 0 0 0 12.5 0m-7 2.75a.75.75 0 0 1 .75.75v2a.75.75 0 0 1-1.5 0v-2a.75.75 0 0 1 .75-.75m2 0a.75.75 0 0 1 .75.75v2a.75.75 0 0 1-1.5 0v-2a.75.75 0 0 1 .75-.75m2.75.75v2a.75.75 0 0 1-1.5 0v-2a.75.75 0 0 1 1.5 0m1.25-.75a.75.75 0 0 1 .75.75v2a.75.75 0 0 1-1.5 0v-2a.75.75 0 0 1 .75-.75"/>
+                    </svg>
+                    Audit Logs
                 </button>
 
                 <button onClick={() => router.replace("/logout")} className={styles.logoutButton}>
