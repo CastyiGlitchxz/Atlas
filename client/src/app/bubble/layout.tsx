@@ -47,18 +47,12 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     const emRef = useRef<eventManager | null>(null);
-    const tokenRef = useRef<string | null>(null);
 
     if (!emRef.current) {
         emRef.current = new eventManager();
     }
 
-    if (!tokenRef.current) {
-        tokenRef.current = get_token();
-    }
-
     const em = emRef.current;
-    const token = tokenRef.current;
 
     const router = useRouter();
     const [selectedTab, setSelectedTab] = useState(0);
@@ -94,10 +88,13 @@ export default function RootLayout({
     };
 
     useEffect(() => {
+        const token = get_token();
         em.emitEvent("update_status", { auth: token, status: "online" });
     }, []);
 
     useEffect(() => {
+        const token = get_token();
+
         document.onfocus = function() {
             setTimeout(() => {
                 em.emitEvent("update_status", { auth: token, status: "online" });
@@ -112,6 +109,7 @@ export default function RootLayout({
     }, []);
     
     useEffect(() => {
+        const token = get_token();
 
         window.onbeforeunload = function() {
             em.emitEvent("update_status", { auth: token, status: "offline" });
@@ -120,6 +118,8 @@ export default function RootLayout({
 
     useEffect(() => {
         (async () => {
+            const token = get_token();
+
             const res = await fetch(construct_path("api/servers/get"), {
                 method: "POST",
                 headers: {
@@ -151,6 +151,7 @@ export default function RootLayout({
         const handler = (msg: MessageEvent) => {
             const {event, data} = JSON.parse(msg.data);
             
+            const token = get_token();
             const server: serverFormat = data.server;
 
             switch(event) {
