@@ -1,6 +1,5 @@
 #include "headers/database.hpp"
 #include "headers/messaging.hpp"
-#include <cstddef>
 #include <iomanip>
 #include <iostream>
 #include <optional>
@@ -8,6 +7,7 @@
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include "headers/abstract.hpp"
+#include <yaml-cpp/yaml.h>
 
 using json = nlohmann::json;
 
@@ -71,84 +71,63 @@ json get_user_by_UUID(const std::string& UUID) {
 json get_user_all(const std::string& UUID);
 
 json get_messages(const std::string serverID, std::optional<int> index) {
+    static int messageLimit = YAML::LoadFile("../config/app-config.yml")["chat"]["message_limit"].as<int>();
+
     json result;
-    std::vector<Message> messages;
-    int messageLimit = 25;
+    result["messages"] = json::array();
+    result["status"] = true;
+
+    std::vector<json> messageList;
 
     try {
         Database db = connect_db();
         auto& conn = db.getConnection();
-
         pqxx::nontransaction txn(conn);
 
-        pqxx::result r_init;
+        std::string query = 
+            "SELECT m.id, m.server_id, m.user_id, m.content, m.timestamp, u.displayname, u.profile_picture, m.message_ref, m.link "
+            "FROM messages m "
+            "JOIN users u ON m.user_id = u.user_id " // Fetch user data in the same breath
+            "WHERE m.server_id = " + txn.quote(serverID);
 
-        if (!index.has_value()) {
-            r_init = txn.exec(
-                "SELECT id, server_id, user_id, content, timestamp, message_ref, link "
-                "FROM messages WHERE server_id = " + txn.quote(serverID) +
-                " ORDER BY id DESC LIMIT " + txn.quote(messageLimit) + ";"
-            );
-        } else {
-            r_init = txn.exec(
-                "SELECT id, server_id, user_id, content, timestamp, message_ref, link "
-                "FROM messages WHERE server_id = " + txn.quote(serverID) +
-                "AND id < " + txn.quote(index) +
-                " ORDER BY id DESC LIMIT " + txn.quote(messageLimit) + ";"
-            );
+        if (index.has_value()) {
+            query += " AND m.id < " + txn.quote(index.value());
         }
         
+        query += " ORDER BY m.id DESC LIMIT " + txn.quote(messageLimit) + ";";
 
-        messages.reserve(r_init.size());
+        pqxx::result r = txn.exec(query);
+        
+        for (auto row : r) {
+            std::tm tm = parseTimestamp(r[0]["timestamp"].as<std::string>());
+            std::ostringstream oss;
+            oss << std::put_time(&tm, "%I:%M %p"); // 12-hour with AM/PM
 
-        std::tm tm = parseTimestamp(r_init[0]["timestamp"].as<std::string>());
-
-        std::ostringstream oss;
-        oss << std::put_time(&tm, "%I:%M %p"); // 12-hour with AM/PM
-        std::string time12h = oss.str();
-
-        for (auto row : r_init) {
             std::optional<int> message_ref = row["message_ref"].as<std::optional<int>>();
             std::optional<std::string> link = row["link"].as<std::optional<std::string>>();
 
-            Message msg {
-                row["id"].as<int>(),
-                row["server_id"].as<std::string>(),
-                row["user_id"].as<std::string>(),
-                row["content"].as<std::string>(),
-                time12h,
-                message_ref,
-                link
-            };
-            messages.push_back(msg);
-        }
-
-        std::reverse(messages.begin(), messages.end());
-
-        result["success"] = true;
-        result["messages"] = json::array();
-
-        for (auto& msg : messages) {
-            json user = get_user_all(msg.user_id);
-            std::string displayName = user.value("displayName", "");
-            std::string pfp = user.value("picture", "");
-
             json message;
-            message["id"] = msg.id;
-            message["server_id"] = msg.server_id;
-            message["displayName"] = displayName;
-            message["picture"] = pfp;
-            message["content"] = msg.content;
-            message["timestamp"] = msg.timestamp;
-            message["messageRef"] = msg.message_ref ? json(*msg.message_ref) : json(nullptr);
-            message["link"] = msg.link ? json(*msg.link) : json(nullptr);
+            message["id"] = row["id"].as<int>();
+            message["server_id"] = row["server_id"].as<std::string>();
+            message["displayName"] = row["displayName"].as<std::string>();
+            message["picture"] = row["profile_picture"].as<std::string>();
+            message["content"] = row["content"].as<std::string>();;
+            message["timestamp"] = oss.str();
+            message["messageRef"] = row["message_ref"].is_null() ? json(nullptr) : json(row["message_ref"].as<int>());
+            message["link"] = row["link"].is_null() ? json(nullptr) : json(row["link"].as<std::string>());
 
-            result["messages"].push_back(message);
+            messageList.push_back(message);
+        }
+        
+        std::reverse(messageList.begin(), messageList.end());
+        
+        for (auto& m : messageList) {
+            result["messages"].push_back(m);
         }
 
     } catch (const std::exception& e) {
-        result["success"] = false;
-        result["error"] = e.what();
+        result["status"] = false;
+        result["what"] = e.what();
     }
 
     return result;

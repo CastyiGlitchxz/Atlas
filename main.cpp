@@ -20,6 +20,7 @@
 #include <vector>
 #include "headers/cenv.hpp"
 #include "headers/abstract.hpp"
+#include <yaml-cpp/yaml.h>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -349,7 +350,9 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
             std::string message_id = message_object.value("id", "");
             std::string time = message_object.value("timestamp", "");
 
-            // discord_sendM(displayname, text);
+            if (content.starts_with("[discord] ")) {
+                discord_sendM(displayName, content);
+            }
 
             json jdata;
             jdata["serverID"] = sid;
@@ -785,30 +788,33 @@ int main(int argc, char* argv[]) {
 
     std::map<std::string, HttpRoute> routes;
 
-    // Root endpoint
-    // routes["/"] = [](const http::request<http::string_body>& req) {
-    //     http::response<http::string_body> res{http::status::ok, req.version()};
-    //     json response_body;
-    //     auto body = json::parse(req.body());
+    YAML::Node config = YAML::LoadFile("../config/app-config.yml");
 
-    //     try {
-    //         res.result(http::status::ok); 
+    if (!config["application"])
+        throw "Could not find 'application' in 'app-config' file";
 
-    //     } catch (const std::exception &e) {
-    //         std::cout << "Error: " << e.what() << "\n";
-    //         response_body["error"] = "Internal server error.";
-    //         response_body["what"] = e.what();
-    //     }
+    routes["/"] = [config](const http::request<http::string_body>& req) {
+        http::response<http::string_body> res{http::status::ok, req.version()};
+        json response_body;
+        // auto body = json::parse(req.body());
 
-    //     res.set(http::field::content_type, "application/json");
-    //     res.body() = response_body.dump();
-    //     res.prepare_payload();
+        try {
+            res.result(http::status::ok);
+            response_body["api_version"] = config["application"]["version"].as<std::string>();
+            response_body["welcome"] = "Welcome to the Atlas api.";
 
-    //     return res;
-    // };
+        } catch (const std::exception &e) {
+            std::cout << "Error: " << e.what() << "\n";
+            response_body["error"] = "Internal server error.";
+            response_body["what"] = e.what();
+        }
 
-    // Login endpoint
-    // Within your main function, replacing the current routes["/login"] definition:
+        res.set(http::field::content_type, "application/json");
+        res.body() = response_body.dump();
+        res.prepare_payload();
+
+        return res;
+    };
 
     routes["/api/login"] = [](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::ok, req.version()};
@@ -832,9 +838,10 @@ int main(int argc, char* argv[]) {
             std::string username = body.value("username", "");
             std::string password = body.value("password", "");
 
-            json user = get_user(username); // Assumes this gets user details, including user_id
-
+            
             if (login_user(username, password)) {
+                json user = get_user(username);
+                
                 // Calculate expiry for 1 week (matches cookie Max-Age)
                 auto expiry_time = std::chrono::system_clock::now() + std::chrono::minutes(60 * 24 * 7);
 
@@ -913,40 +920,29 @@ int main(int argc, char* argv[]) {
 
         res.set(http::field::access_control_allow_origin, "http://localhost:3000"); 
         res.set(http::field::access_control_allow_credentials, "true");
+        auto body = json::parse(req.body());
 
-        try {
-            std::string body_str = req.body();
+        std::string serverID = body["sid"];
+        std::optional<int> index;
 
-            if (body_str.empty()) {
-                // return json{{"error", "Empty body received"}};
-                response_body["error"] = {
-                    {"msg", "server error"}
-                };
-            }
-            
-            auto body_json = json::parse(body_str);
-            std::string serverID = body_json["sid"];
-            std::optional<int> index;
+        res.result(http::status::ok);
 
-            if (body_json.contains("index") && !body_json["index"].is_null()) {
-                if (body_json["index"].is_number_integer()) {
-                    index = body_json["index"].get<int>();
-                } else {
-                    std::cout << "Index is not an integer!\n";
-                }
-            }
-            
-            res.result(http::status::ok);
-
-            auto messages = get_messages(serverID, index);
-
-            response_body["messages"] = messages;
-            response_body["status"] = 200;
-        } catch (const std::exception &e) {
-            std::cout << "Error: " << e.what() << "\n";
-            response_body["error"] = "Internal server error.";
-            response_body["what"] = e.what();
+        if (body.empty()) {
+            // return json{{"error", "Empty body received"}};
+            response_body["error"] = {
+                {"msg", "server error"}
+            };
         }
+
+        if (body.contains("index") && !body["index"].is_null()) {
+            if (body["index"].is_number_integer()) {
+                index = body["index"].get<int>();
+            } else {
+                std::cout << "Index is not an integer!\n";
+            }
+        }
+    
+        response_body = get_messages(serverID, index);
 
         res.set(http::field::content_type, "application/json");
         res.body() = response_body.dump();
@@ -1116,24 +1112,12 @@ int main(int argc, char* argv[]) {
         auto body = json::parse(req.body());
         std::string user_id = parse_bearer_token(req);
 
+        res.result(http::status::ok);
+
         res.set(http::field::access_control_allow_origin, "http:://localhost:3000");
         res.set(http::field::access_control_allow_credentials, "true");
 
-        try {
-            // std::string user_id = get_user_id_from_cookie(req);
-
-            res.result(http::status::ok);
-
-            json servers = user_get_all_servers(user_id);
-
-            response_body["servers"] = servers;
-            response_body["status"] = 200;
-
-        } catch (std::exception &e) {
-            std::cout << e.what() << "\n";
-            response_body["error"] = 404;
-            response_body["what"] = e.what();
-        }
+        response_body = user_get_all_servers(user_id);
 
         res.set(http::field::content_type, "application/json");
         res.body() = response_body.dump();

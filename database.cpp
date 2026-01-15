@@ -252,7 +252,7 @@ json user_get_all_servers(const std::string& UUID) {
             std::string serverId = row["server_id"].as<std::string>();
             std::string serverName = row["server_name"].c_str();  // or row["name"].as<std::string>()
             std::string owner = row["owner"].c_str();
-            response["server"].push_back({
+            response["servers"].push_back({
                 {"name", serverName},
                 {"serverID", serverId},
                 {"owner", owner}

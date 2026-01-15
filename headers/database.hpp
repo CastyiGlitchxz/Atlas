@@ -12,7 +12,7 @@ private:
 
 inline Database connect_db() {
     cenvxx clangxx;
-    auto cenv = clangxx.init("../secrets/cenv");
+    auto cenv = clangxx.init("../config/cenv");
 
     std::string dbname = cenv.find_token("database", "dbname");
     std::string user = cenv.find_token("database", "user");

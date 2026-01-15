@@ -1,8 +1,8 @@
 'use client'
+import React, { useEffect, useState } from "react";
 import { eventManager } from "../../typescript/eventsManager";
 import { getWebSocket } from "../../typescript/websocket";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
 import { get_token } from "../../typescript/user";
 import styles from "../../stylesheets/css/invite.module.css";
 import { globals } from "../../typescript/env";

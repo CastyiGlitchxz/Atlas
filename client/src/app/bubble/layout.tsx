@@ -130,7 +130,7 @@ export default function RootLayout({
             });
             const data = await res.json();
 
-            setServerList(data.servers.server);
+            setServerList(data.servers);
         })();
     }, []);
 

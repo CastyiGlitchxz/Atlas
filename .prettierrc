@@ -6,7 +6,8 @@
       "files": [
         "*.ts",
         "*.js",
-        "*.scss"
+        "*.scss",
+        "*.yml"
       ]
     }
   ]

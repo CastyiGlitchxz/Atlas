@@ -70,7 +70,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                 body: JSON.stringify({ sid: sid, index: pageIndex }),
             });
             const data = await res.json();
-            const messages: messageFormat[] = data.messages.messages;
+            const messages: messageFormat[] = data.messages;
 
             setChatContent(messages);
         })();
@@ -294,7 +294,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                         body: JSON.stringify({ sid: sid, index: pageIndex - 1 }) // load previous page
                     });
                     const data = await res.json();
-                    const newMessages: messageFormat[] = data.messages.messages;
+                    const newMessages: messageFormat[] = data.messages;
 
                     if (newMessages && newMessages.length > 0) {
                         setChatContent(prev => [...newMessages, ...prev]);

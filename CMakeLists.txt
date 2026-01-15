@@ -9,6 +9,7 @@ find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(PostgreSQL REQUIRED)
 find_package(PkgConfig REQUIRED)
+find_package(yaml-cpp CONFIG REQUIRED)
 
 # Add executable first
 add_executable(atlas_server main.cpp database.cpp messaging.cpp server.cpp invites.cpp)
@@ -57,6 +58,7 @@ endif()
 # Link common libraries
 target_link_libraries(atlas_server
     PRIVATE
+    yaml-cpp
     PostgreSQL::PostgreSQL
     Threads::Threads
     OpenSSL::SSL
