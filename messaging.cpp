@@ -68,8 +68,6 @@ json get_user_by_UUID(const std::string& UUID) {
     return result;
 }
 
-json get_user_all(const std::string& UUID);
-
 json get_messages(const std::string serverID, std::optional<int> index) {
     static int messageLimit = YAML::LoadFile("../config/app-config.yml")["chat"]["message_limit"].as<int>();
 
@@ -111,10 +109,11 @@ json get_messages(const std::string serverID, std::optional<int> index) {
             message["server_id"] = row["server_id"].as<std::string>();
             message["displayName"] = row["displayName"].as<std::string>();
             message["picture"] = row["profile_picture"].as<std::string>();
-            message["content"] = row["content"].as<std::string>();;
+            message["content"] = row["content"].as<std::string>();
             message["timestamp"] = oss.str();
             message["messageRef"] = row["message_ref"].is_null() ? json(nullptr) : json(row["message_ref"].as<int>());
             message["link"] = row["link"].is_null() ? json(nullptr) : json(row["link"].as<std::string>());
+            message["userID"] = row["user_id"].as<std::string>();
 
             messageList.push_back(message);
         }

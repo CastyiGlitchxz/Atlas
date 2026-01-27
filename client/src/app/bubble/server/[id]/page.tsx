@@ -1,6 +1,6 @@
 'use client'
 import { getWebSocket } from "../../../../typescript/websocket";
-import React, { use, useState, useEffect, JSX , useRef, useContext} from "react"
+import React, { use, useState, useEffect, JSX , useRef, useContext, memo, useMemo } from "react"
 import { eventManager } from "../../../../typescript/eventsManager";
 import { construct_path, globals } from "../../../../typescript/env";
 import styles from "../../../../stylesheets/css/chat.module.css";
@@ -21,6 +21,81 @@ function delete_message(message_id: string) {
     em.emitEvent("delete_message", { auth: token, message_id: message_id });
 };
 
+const MessageItem = memo(({ 
+    content, 
+    refMsgData, 
+    isCurrentUser, 
+    onEdit, 
+    onReply, 
+    onDelete 
+}: { 
+    content: messageFormat, 
+    refMsgData?: messageFormat, 
+    isCurrentUser: boolean,
+    onEdit: () => void,
+    onReply: () => void,
+    onDelete: () => void
+}) => {
+    const canvasRef = useRef<HTMLCanvasElement[]>([]);
+    useEffect(() => {
+        if (!canvasRef.current) return;
+
+        canvasRef.current.forEach((canvas) => {
+            if (!canvas) return;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return;
+
+            // Reset transforms and clear previous drawing
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Set origin to bottom-left
+            ctx.translate(0, canvas.height);
+            ctx.scale(1, -1);
+
+            // Draw curved line
+            ctx.beginPath();
+            ctx.moveTo(20, 0);
+            ctx.quadraticCurveTo(20, 14, 70, 10);
+            ctx.strokeStyle = "gray";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        });
+    }, []);
+    
+    return (
+        <div className={styles.message}>
+            {refMsgData && (
+                <div className={styles.messageReference}>
+                    <canvas ref={(el) => {if (el) canvasRef.current[refMsgData.id] = el}} width={40} height={20}></canvas>
+                    <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${refMsgData.picture}`} alt="" width={20} height={20} unoptimized />
+                    <p>{refMsgData.displayName} | {refMsgData.content}</p>
+                </div>
+            )}
+
+            <div className={styles.messageContent}>
+                <div className={styles.userMessage}>
+                    <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${content.picture}`} alt="" width={50} height={50} unoptimized />
+                    <div>
+                        <div style={{ display: "flex", gap: "5px"}}>
+                            <p><strong>{content.displayName}</strong></p>
+                            <p>{content.timestamp}</p>
+                        </div>
+                        <p style={{whiteSpace: "pre-line"}}>{content.content}</p>
+                    </div>
+                </div>
+
+                <div className={styles.messageStateItems}>
+                    {isCurrentUser && <button onClick={onEdit}>Edit</button>}
+                    <button onClick={onReply}>Reply</button>
+                    {isCurrentUser && <button onClick={onDelete}>Delete</button>}
+                </div>
+            </div>
+        </div>
+    );
+});
+
+MessageItem.displayName = "MessageItem";
 export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
     const { id } = use(params);
@@ -41,7 +116,6 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     const sid: string = id;
 
     const chatRef = useRef<HTMLDivElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement[]>([]);
     const [message, setMessage] = useState<string>("");
     const [chatContent, setChatContent] = useState<messageFormat[]>([]);
     const [userList, setUserList] = useState<{online: Profile[], offline: Profile[]}>({
@@ -51,12 +125,15 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     const [messageMode, setMessageMode] = useState<string>("message");
     const [indicatorMessage, setIndicatorMessage] = useState<string>("");
     const [mid, setMid] = useState<number>(0);
-    const [user, setUser] = useState<string>("");
+    const [user, setUser] = useState<{author: {"displayName": string, "userid": string}} | undefined>({author: {
+        displayName: "",
+        userid: ""
+    }});
     const [pageIndex, setPageIndex] = useState<number>(null);
     const ctx = useContext(ProfilePanel);
-    if (!ctx) {
+    
+    if (!ctx)
         throw new Error("ProfilePanel must be used within a ProfilePanel.Provider");
-    }
 
     const { setPreview, setShowPreview } = ctx;
 
@@ -75,12 +152,12 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
             setChatContent(messages);
         })();
     }, [sid]);
-    
+
     useEffect(() => {
         (async () => {
             em.emitEvent("get_user", { token: token });
         })();
-    }, [chatContent, user, sid]);
+    }, []);
 
     function sendMessage(): void {
         if (message === "" || !message) return;
@@ -170,7 +247,8 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                     serverID: sid,
                     timestamp: message.timestamp,
                     messageRef: message.messageRef,
-                    link: message.link
+                    link: message.link,
+                    userID: message.userID
                 }
             ]);
         };
@@ -182,7 +260,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
 
             switch(event) {
                 case "message":
-                    
+                    console.log(message);
                     if (isSameChat(message.serverID, sid) === false) return;
                     addMessageToChat(message);
                     break;
@@ -206,7 +284,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                     break;
 
                 case "return_user":
-                    setUser(data.displayName);
+                    setUser(data);
                     break;
 
                 default:
@@ -314,30 +392,10 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
         return () => container.removeEventListener("scroll", handleScroll);
     }, [sid, pageIndex]);
 
-    useEffect(() => {
-        if (!canvasRef.current) return;
-
-        canvasRef.current.forEach((canvas) => {
-            if (!canvas) return;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) return;
-
-            // Reset transforms and clear previous drawing
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Set origin to bottom-left
-            ctx.translate(0, canvas.height);
-            ctx.scale(1, -1);
-
-            // Draw curved line
-            ctx.beginPath();
-            ctx.moveTo(20, 0);
-            ctx.quadraticCurveTo(20, 14, 70, 10);
-            ctx.strokeStyle = "gray";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        });
+    const messageMap = useMemo(() => {
+        const map = new Map<number, messageFormat>();
+        chatContent.forEach(msg => map.set(msg.id, msg));
+        return map;
     }, [chatContent]);
 
     return (
@@ -345,79 +403,24 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
             <div className={styles.centerContainer}>
                 <div id={styles.chat} ref={chatRef}>
                     {chatContent && chatContent.map((content) => (
-                        <div key={content.id} className={styles.message}>
-                            {content.messageRef !== null && 
-                                <div>
-                                    {chatContent.filter(refMsg => refMsg.id == content.messageRef).map((refMsgData, index) => (
-                                        <div key={index} className={styles.messageReference}>
-                                            <canvas ref={(el) => {if (el) canvasRef.current[refMsgData.id] = el}} width={40} height={20}></canvas>
-                                            <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${refMsgData["picture"]}`} alt="" width={20} height={20} unoptimized quality={1}/>
-                                            <p>{refMsgData.displayName}</p>
-                                            <p> | {refMsgData.content}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            }
-
-                            <div className={styles.messageContent}>
-                                <div className={styles.userMessage}>
-                                    <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${content["picture"]}`} alt="" width={50} height={50} unoptimized quality={1}/>
-                                    <div>
-                                        <div style={{ display: "flex", gap: "5px"}}>
-                                            <p>{content["displayName"]}</p>
-                                            *
-                                            <p>{content["timestamp"]}</p>
-                                        </div>
-                                        {content.link === null ? 
-                                            <p style={{whiteSpace: "pre-line"}}>{content["content"]}</p>
-                                            :
-                                            <a href={content.link} data-external onClick={(e) => {
-                                                e.preventDefault();
-                                                console.log(message.link)
-                                            }} style={{ color: "white", textDecorationLine: 'underline' }}>{content.content}</a>
-
-                                        }
-                                    </div>
-                                </div>
-
-                                <div className={styles.messageStateItems}>
-                                    { content.displayName === user &&
-                                        <button onClick={() => {
-                                            setMessage(content["content"].toString());
-                                            setIndicatorMessage("Editing message");
-                                            setMessageMode("edit");
-                                            setMid(content["id"]);
-                                        }}>
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" className="bi bi-pencil-square" viewBox="0 0 16 16">
-                                                <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
-                                                <path fillRule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/>
-                                            </svg>
-                                        </button>
-                                    }
-
-                                    <button onClick={() => {
-                                        setMessageMode("reply");
-                                        setIndicatorMessage("Replying to message");
-                                        setMid(content["id"]);
-                                    }}>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" className="bi bi-arrow-90deg-left" viewBox="0 0 16 16">
-                                            <path fillRule="evenodd" d="M1.146 4.854a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H12.5A2.5 2.5 0 0 1 15 6.5v8a.5.5 0 0 1-1 0v-8A1.5 1.5 0 0 0 12.5 5H2.707l3.147 3.146a.5.5 0 1 1-.708.708z"/>
-                                        </svg>
-                                    </button>
-
-                                    { content.displayName === user &&
-                                        <button onClick={() => {
-                                            delete_message(content["id"].toString());
-                                        }}>
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" className="bi bi-trash" viewBox="0 0 16 16">
-                                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
-                                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
-                                            </svg>
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-                        </div>
+                        <MessageItem 
+                            key={content.id}
+                            content={content}
+                            refMsgData={content.messageRef ? messageMap.get(content.messageRef) : undefined}
+                            isCurrentUser={content.userID === user.author.userid}
+                            onEdit={() => {
+                                setMessage(content.content.toString());
+                                setIndicatorMessage("Editing message");
+                                setMessageMode("edit");
+                                setMid(content.id);
+                            }}
+                            onReply={() => {
+                                setMessageMode("reply");
+                                setIndicatorMessage("Replying to message");
+                                setMid(content.id);
+                            }}
+                            onDelete={() => delete_message(content.id.toString())}
+                        />
                     ))}
                 </div>
 

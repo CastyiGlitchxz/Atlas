@@ -22,7 +22,6 @@ export default function LogoutPage() {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${token}`
                 },
-                body: JSON.stringify({ })
             });
             
             const data: {

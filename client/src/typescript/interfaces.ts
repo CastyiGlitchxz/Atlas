@@ -27,6 +27,7 @@ export interface messageFormat {
     timestamp?: string;
     messageRef: number;
     link?: string;
+    userID: string;
 };
 
 export interface loginResponse {

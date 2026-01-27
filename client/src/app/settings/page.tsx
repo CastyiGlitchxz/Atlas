@@ -48,7 +48,6 @@ export default function SettingsPage() {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${token}`
                 },
-                body: JSON.stringify({  })
             });
             const data = await res.json();
             setUser(data.user);

@@ -3,6 +3,9 @@ import { Profile } from "./interfaces";
 import { Dispatch, SetStateAction } from "react";
 
 export function get_token(): string {
+    if (typeof document === "undefined")
+        return null;
+
     const token = localStorage.getItem("token");
     if (!token) return "";
 

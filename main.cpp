@@ -363,11 +363,11 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
             jdata["messageRef"] = mRef ? json(*mRef) : json(nullptr);
             jdata["timestamp"] = time;
             jdata["link"] = link ? json(*link) : json(nullptr);
+            // jdata["userID"] = user_id;
 
             json msg;
             msg["event"] = "message";
             msg["data"] = jdata;
-
 
             std::cout << "[Broadcast] " << content << "\n";
 
@@ -469,6 +469,7 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
             jdata["messageRef"] = messageRef;
             jdata["timestamp"] = time;
             jdata["link"] = link ? json(*link) : json(nullptr);
+            jdata["userID"] = user_id;
 
             json msg;
             msg["event"] = "message";
@@ -534,10 +535,17 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
             std::string token = data.value("token", "");
             std::string user_id = decode_token(token);
             json user = get_user_all(user_id);
+
+            
  
             return json{
                 {"event", "return_user"},
-                {"data", user},
+                {"data", {
+                    {"author", {
+                        {"userid", user_id},
+                        {"displayName", user.value("displayName", "")}
+                    }}
+                }},
             };
         };
 
@@ -791,7 +799,7 @@ int main(int argc, char* argv[]) {
     YAML::Node config = YAML::LoadFile("../config/app-config.yml");
 
     if (!config["application"])
-        throw "Could not find 'application' in 'app-config' file";
+        throw std::runtime_error("Could not find 'application' in 'app-config' file");
 
     routes["/"] = [config](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::ok, req.version()};
@@ -894,7 +902,6 @@ int main(int argc, char* argv[]) {
     routes["/api/logout"] = [](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
         json response_body;
-        auto body = json::parse(req.body());
 
         try {
             res.result(http::status::ok);
@@ -988,7 +995,6 @@ int main(int argc, char* argv[]) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
         json response_body;
 
-        auto body = json::parse(req.body());
         std::string user_id = parse_bearer_token(req);
 
         // 🔥 Always include CORS headers before returning any response
@@ -1109,7 +1115,6 @@ int main(int argc, char* argv[]) {
     routes["/api/servers/get"] = [](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
         json response_body;
-        auto body = json::parse(req.body());
         std::string user_id = parse_bearer_token(req);
 
         res.result(http::status::ok);
