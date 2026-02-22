@@ -5,9 +5,12 @@
 #include <exception>
 #include <nlohmann/json.hpp>
 #include <iostream>
+#include <optional>
 #include <string>
 
 using json = nlohmann::json;
+
+json get_user_all(const std::string& UUID);
 
 json server_get_all_users(const std::string server_id) {
     json response;
@@ -53,6 +56,38 @@ json server_get_all_users(const std::string server_id) {
     return response;
 }
 
+json get_all_invite_codes(std::string& serverID) {
+    json response;
+
+    try {
+        Database db = connect_db();
+        auto& conn = db.getConnection();
+
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec_params("SELECT * FROM server_invites WHERE sid = $1", serverID);
+
+        if (r.empty()) {
+            return {"message", "No invite codes"};
+        } else {
+
+            for (auto row : r) {
+                std::string invite_code = r[0]["code"].as<std::string>();
+                std::string issued_by = r[0]["issued_by"].as<std::string>();
+    
+                response["codes"].push_back({
+                    {"issued_by", issued_by},
+                    {"invite_code", invite_code}
+                });
+                response["status"] = 200;
+            }
+        }
+    } catch (std::exception& e) {
+        response["error"] = e.what();
+    }
+
+    return response;
+}
+
 json get_server(const std::string server_id) {
     json response;
 
@@ -68,11 +103,20 @@ json get_server(const std::string server_id) {
             return json{{"status", "failed"}};
         } else {
             std::string server_name = r[0]["server_name"].as<std::string>();
-            std::string owner = r[0]["owner"].as<std::string>();
+            std::string user_id = r[0]["owner"].as<std::string>();
+            std::optional<std::string> icon = r[0]["icon"].as<std::optional<std::string>>();
+
+            // remember to come back and fix this by not fetching from the user function but the db itself.
+            std::string username = get_user_all(user_id).value("username", "");
+            
 
             response["server"] = {
                 {"server_name", server_name},
-                {"owner", owner}
+                {"owner", {
+                    {"user_id", user_id},
+                    {"username", username}
+                }},
+                {"icon", icon},
             };
             response["status"] = 200;
         }

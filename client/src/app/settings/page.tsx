@@ -1,9 +1,9 @@
 'use client'
 import React, { useEffect, useRef, useState } from "react"
-import { construct_path } from "../../typescript/env";
+import { construct_path, globals } from "../../typescript/env";
 import { get_token } from "../../typescript/user";
 import styles from "../../stylesheets/css/settings.module.css";
-import { Account, Profile } from "../../typescript/interfaces";
+import { Account, appearanceStatus, Profile } from "../../typescript/interfaces";
 import { useRouter } from "next/navigation";
 import { Tab, Tabs } from "../components";
 import { getWebSocket } from "../../typescript/websocket";
@@ -11,21 +11,41 @@ import { getWebSocket } from "../../typescript/websocket";
 export default function SettingsPage() {
     const router = useRouter();
     type User = Account & Profile;
-
-    const [user, setUser] = useState<User>({
-        displayName: "",
-        userid: "",
-        username: "",
-        customStatus: "",
-        picture: "",
-        status: "offline",
-        bio: ""
+    const [user, setUser] = useState<User  | null>(null);
+    const [accessibilitySettings, setAccessibilitySettings] = useState({
+        fontSize: 12,
     });
     const [selectedTab, setSelectedTab] = useState(0);
+    const [loading, setLoading] = useState<boolean>(true);
 
+    const wsRef = useRef<WebSocket | null>(null);
+    const tokenRef = useRef<string | null>(null);
+    if (!tokenRef.current) {
+        tokenRef.current = get_token();
+    }
+    const token = tokenRef.current;
+
+    useEffect(() => {        
+        (async () => {
+            try {
+                const res = await fetch(construct_path("api/account/get"), {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                });
+                const data = await res.json();
+                setUser(data.user);
+            } catch (err) {
+                console.log(err);
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, []);
+    
     async function update_account() {
-        const token = get_token();
-
         const res = await fetch(construct_path("api/account/update"), {
             method: "POST",
             headers: {
@@ -38,22 +58,6 @@ export default function SettingsPage() {
         console.log(data);
     }
 
-    useEffect(() => {
-        async function getUserData() {
-            const token = get_token();
-
-            const res = await fetch(construct_path("api/account/get"), {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-            });
-            const data = await res.json();
-            setUser(data.user);
-        }
-        getUserData();
-    }, []);
 
     function enableNotifications() {
         if (!("Notification" in window)) {
@@ -69,18 +73,18 @@ export default function SettingsPage() {
         };
     };
 
-    const wsRef = useRef<WebSocket | null>(null);
 
-    const connectWS = () => {
-        const ws = getWebSocket();
-        if (wsRef.current) return;
-        ws.binaryType = "arraybuffer"; // important for binary
-        ws.onopen = () => console.log("WebSocket connected");
-        ws.onmessage = (msg) => console.log("Server says:", msg.data);
-        wsRef.current = ws;
-    };
-
+    
     useEffect(() => {
+        const connectWS = () => {
+            const ws = getWebSocket();
+            if (wsRef.current) return;
+            ws.binaryType = "arraybuffer"; // important for binary
+            ws.onopen = () => console.log("WebSocket connected");
+            ws.onmessage = (msg) => console.log("Server says:", msg.data);
+            wsRef.current = ws;
+        };
+
         connectWS();
     });
 
@@ -89,12 +93,46 @@ export default function SettingsPage() {
         if (!file || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
         // send raw binary
-        // file.arrayBuffer().then((buffer) => {
-        //     wsRef.current!.send(buffer);
-        //     console.log("Sent profile image:", file.name, "Size:", buffer.byteLength);
-        // });
+        file.arrayBuffer().then((buffer) => {
+            const bytes = new Uint8Array(buffer);
+            let binary = "";
+            const chunkSize = 0x8000;
+
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode(
+                    ...bytes.subarray(i, i + chunkSize)
+                );
+            }
+
+            const base64 = btoa(binary);
+            const meta = JSON.stringify({
+                event: "upload_profile",
+                userid: user.userid,
+                buffer: base64
+            });
+
+            wsRef.current!.send(meta);
+            console.log("Sent profile image:", file.name, "Size:", buffer.byteLength);
+        });
     };
 
+    // function isBase64(str: string) {
+    //     try {
+    //         return btoa(atob(str)) === str.replace(/\s/g, '');
+    //     } catch (e) {
+    //         return false;
+    //     }
+    // }
+    
+    useEffect(() => {
+        if (!loading && !user) {
+            router.replace("/");
+        }
+    }, [user, loading, router]);
+    
+    if (loading) return <div>Fetching user</div>;
+    if (!user) return <div>No User</div>;
+    
     return (
         <div className={styles.main}>
             <div className={styles.settingBar}>
@@ -156,37 +194,70 @@ export default function SettingsPage() {
             <div className={styles.settings}>
                 <Tabs selectedTab={selectedTab}>
                     <Tab>
-                        <div className={styles.userInfo}>
-                            <label htmlFor="pfp_change">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={user.picture !== "" ? user.picture : "/assets/profile.jpg"} alt="e" width={100} height={100} className={styles.profilePicture}/>
-                            </label>
-                            <div className={styles.subInfo}>
-                                <div className={styles.userNames}>
-                                    <input value={user.username} onChange={(e) => setUser(prev => ({
-                                        ...prev,
-                                        username: e.target.value
-                                    }))} type="text"/>
-                                    <p>*</p>
-                                    <input value={user.displayName} onChange={(e) => setUser(prev => ({
-                                        ...prev,
-                                        displayName: e.target.value
-                                    }))} type="text"/>
-                                </div>
+                        <div>
+                            <div className={styles.userBanner} style={{ background: `url('${user.picture}')` }}>
+                                <div className={styles.profileInformation}>
+                                    <label htmlFor="pfp_change">
+                                        <img src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${user.picture}`} alt="e" width={100} height={100} className={styles.profilePicture}/>
+                                    </label>
 
-                                <input value={user.customStatus} onChange={(e) => setUser(prev => ({
-                                    ...prev,
-                                    customStatus: e.target.value
-                                }))} type="text"/>
+                                    <div className={styles.profileInformationContent}>
+                                        <input value={user.displayName} onChange={(e) => setUser(prev => ({
+                                            ...prev,
+                                            displayName: e.target.value
+                                        }))} type="text" style={{ fontSize: "30px", fontWeight: 577 }}/>
+                                        
+                                        <input value={user.customStatus} onChange={(e) => setUser(prev => ({
+                                            ...prev,
+                                            customStatus: e.target.value
+                                        }))} type="text" style={{ color: "gray" }}/>
+                                    </div>
+                                </div>
                             </div>
+
                         </div>
 
-                        <input type="file" accept="image/*" onChange={handleFileChange} id="pfp_change" hidden/>
+                        <div className={styles.userInfo}>
 
-                        <textarea style={{resize: "none"}} rows={10} value={user.bio} onChange={(e) => setUser(prev => ({
-                            ...prev,
-                            bio: e.target.value
-                        }))}/>
+                            <div className={styles.spCustomInput}>
+                                <p style={{ color: "gray", fontSize: "12px" }}>Username</p>
+                                <input value={user.username} onChange={(e) => setUser(prev => ({
+                                    ...prev,
+                                    username: e.target.value
+                                }))} type="text" style={{ fontSize: "17px" }}/>
+                            </div>
+
+                            <div className={styles.spCustomInput}>
+                                <p style={{ color: "gray", fontSize: "12px" }}>Email</p>
+                                <input value={user.email} type="text" onChange={(e) => setUser(prev => ({
+                                    ...prev,
+                                    email: e.target.value
+                                }))} style={{ fontSize: "17px" }}/>
+                            </div>
+
+                            <div className={styles.spCustomInput}>
+                                <p style={{ color: "gray", fontSize: "12px" }}>Appear</p>
+                                <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                                    <span className={`${styles.appearanceIcon} ${styles[user["status"]]}`}></span>
+
+                                    <select value={appearanceStatus[user.status]} onChange={(e) => setUser(prev => ({
+                                        ...prev,
+                                        status: appearanceStatus[e.target.value]
+                                    }))}>
+                                        <option value={appearanceStatus.online}>Online</option>
+                                        <option value={appearanceStatus.idle}>Idle</option>
+                                        <option value={appearanceStatus.offline}>Offline</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <textarea className={styles.bioPanel} rows={10} value={user.bio} onChange={(e) => setUser(prev => ({
+                                ...prev,
+                                bio: e.target.value
+                            }))}/>
+
+                            <input type="file" accept="image/*" onChange={handleFileChange} id="pfp_change" hidden/>
+                        </div>
                     </Tab>
 
                     <Tab>
@@ -196,6 +267,24 @@ export default function SettingsPage() {
                     <Tab>
                         <button onClick={() => enableNotifications()}>Enable Notifications</button>
                     </Tab>
+
+                    <Tab>
+                        <h1>Accessibility</h1>
+                        <input type="range" max={50} min={12} value={accessibilitySettings.fontSize.toString()} onChange={(e) => {
+                            const root = document.documentElement;
+                            if (!root) return;
+                            root.style.setProperty("--fontSize", `${parseInt(e.target.value)}px`);
+                            setAccessibilitySettings(prev => ({
+                                ...prev,
+                                fontSize: parseInt(e.target.value)
+                            }
+                        ))}}/>
+                        <p>{accessibilitySettings.fontSize}</p>
+                    </Tab>
+
+                    <Tab>
+                        <h1>Logs</h1>
+                    </Tab>
                 </Tabs>
 
                 {/* <input value={user.picture}onChange={(e) => setUser(prev => ({
@@ -203,7 +292,9 @@ export default function SettingsPage() {
                     picture: e.target.value
                 }))} type="text"/> */}
 
-                <button onClick={() => update_account()}>Update</button>
+                <div className={styles.barPanel}>
+                    <button onClick={() => update_account()}>Update</button>
+                </div>
             </div>
 
         </div>

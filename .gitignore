@@ -5,7 +5,7 @@ voice_engine/
 
 # Not to be commited for a reason
 config/
-uploads/
+assets/
 
 # vscode
 .vscode

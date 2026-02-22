@@ -1,3 +1,9 @@
+@use 'settings';
+
+:root {
+    @extend %accessibility_settings;
+}
+
 .main {
     display: flex;
 }
@@ -19,7 +25,7 @@
     text-indent: 12px;
     background: transparent;
     font-weight: 530;
-    font-size: 17px;
+    font-size: var(--fontSize);
     color: gray;
     align-items: center;
     display: flex;
@@ -32,6 +38,7 @@
 }
 
 .settings {
+    width: 100%;
     display: flex;
     flex-direction: column;
     gap: 50px;
@@ -39,27 +46,72 @@
 }
 
 .settings input[type=text] {
-    height: 2.4rem;
-    width: 19rem;
-    border: 1px solid gray;
+    height: fit-content;
+    // width: fit-content;
     outline: none;
-    text-indent: 10px;
     border-radius: 6px;
     background: transparent;
+    border: 0;
+}
+
+.userBanner {
+    width: 100%;
+    height: 13rem;
+    border-radius: 16px;
+    position: relative;
+}
+
+.profileInformation {
+    display: flex;
+    position: absolute;
+    bottom: -37%;
+    left: 3%;
+    gap: 10px;
+    align-items: center;
+}
+
+.profileInformationContent {
+    display: grid;
+    grid-template-rows: 70%;
 }
 
 .userInfo {
-    display: flex;
-    background: rgb(35, 35, 35);
-    justify-content: center;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
+    width: 100%;
+    display: grid;
+    // background: rgb(35, 35, 35);
     border-radius: 20px;
+    margin: 8rem 0px;
+    gap: 12px;
 }
 
 .profilePicture {
     border-radius: 100%;
+    border: 5px solid black;
+    object-fit: cover;
+}
+
+.barPanel {
+    display: flex;
+    width: 20rem;
+    height: 3rem;
+    border-radius: 12px;
+    align-items: center;
+    background: rgb(27, 27, 27);
+    padding: 5px;
+}
+
+.barPanel button {
+    border: none;
+    font-size: 20px;
+    font-weight: 600;
+    width: 5rem;
+    height: 2.4rem;
+    background: transparent;
+    border-radius: 10px;
+}
+
+.barPanel button:hover {
+    background: rgb(61, 61, 61);
 }
 
 .userNames {
@@ -84,4 +136,56 @@
 .logoutButton:hover {
     color: white !important;
     background: red !important;
+}
+
+.bioPanel {
+    resize: none;
+    width: 35rem;
+    height: 14rem;
+    border-radius: 12px;
+    padding: 0.5rem;
+    background: #141414;
+    outline: none;
+}
+
+.spCustomInput {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    border: 1px solid gray;
+    width: 16.5rem;
+    padding: 8px;
+    border-radius: 12px;
+    min-width: 16.5rem;
+}
+
+.spCustomInput p {
+    width: 150px;
+}
+
+.spCustomInput select {
+    background: transparent;
+    width: 11rem;
+    border: 0;
+    font-size: 17px;
+    outline: none;
+}
+
+.appearanceIcon {
+    height: 10px;
+    width: 10px;
+    display: flex;
+    border-radius: 12px;
+}
+
+.online {
+    background: lime;
+}
+
+.offline {
+    background: gray;
+}
+
+.idle {
+    background: #fb0;
 }

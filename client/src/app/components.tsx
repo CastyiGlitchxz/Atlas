@@ -1,18 +1,9 @@
 import { Profile } from "../typescript/interfaces";
 import styles from "../stylesheets/css/components.module.css";
-import React, { Dispatch, ReactNode, SetStateAction, useContext, useState } from "react";
-import { ProfilePanel } from "./bubble/layout";
+import React, { Dispatch, ReactNode, SetStateAction, useState } from "react";
+import { globals } from "../typescript/env";
 
-export function UserPanel({ user }: { user: Profile }) {
-    const ctx = useContext(ProfilePanel);
-    if (!ctx) {
-        throw new Error(
-            "ProfilePanel must be used within a ProfilePanel.Provider",
-        );
-    }
-
-    const { setShowPreview } = ctx;
-
+export function UserPanel({ user, setTargetUser }: { user: Profile, setTargetUser: Dispatch<SetStateAction<Profile | null>> }) {
     const statusMap = {
         online: "lime",
         offline: "gray",
@@ -21,45 +12,44 @@ export function UserPanel({ user }: { user: Profile }) {
 
     return (
         <div className={styles.userPanel}>
-            <div style={{ display: "flex", gap: 130 }}>
-                <div
-                    className={styles.panelUserStatus}
-                    style={{ borderColor: statusMap[user.status] }}
-                >
-                    <span style={{ background: statusMap[user.status] }}></span>
-                    <p>{user.status}</p>
+            <div style={{ background: `url('${user.picture}')`, width: "100%", height: "12rem", display: "grid", gap: 10 }}>
+                <div className={styles.userPanelHeader}>
+                    <button
+                        onClick={() => setTargetUser(null)} 
+                        className={styles.panelUserCloseButton}
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="23"
+                            height="23"
+                            fill="currentColor"
+                            className="bi bi-x-diamond-fill"
+                            viewBox="0 0 16 16"
+                        >
+                            <path d="M9.05.435c-.58-.58-1.52-.58-2.1 0L4.047 3.339 8 7.293l3.954-3.954L9.049.435zm3.61 3.611L8.708 8l3.954 3.954 2.904-2.905c.58-.58.58-1.519 0-2.098l-2.904-2.905zm-.706 8.614L8 8.708l-3.954 3.954 2.905 2.904c.58.58 1.519.58 2.098 0l2.905-2.904zm-8.614-.706L7.292 8 3.339 4.046.435 6.951c-.58.58-.58 1.519 0 2.098z" />
+                        </svg>
+                    </button>
+
+                    <div
+                        className={styles.panelUserStatus}
+                        style={{ borderColor: statusMap[user.status] }}
+                    >
+                        <span style={{ background: statusMap[user.status] }}></span>
+                        <p>{user.status}</p>
+                    </div>
                 </div>
 
-                <button
-                    onClick={() => setShowPreview("")}
-                    style={{ border: 0, background: "transparent" }}
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="23"
-                        height="23"
-                        fill="currentColor"
-                        className="bi bi-x-diamond-fill"
-                        viewBox="0 0 16 16"
-                    >
-                        <path d="M9.05.435c-.58-.58-1.52-.58-2.1 0L4.047 3.339 8 7.293l3.954-3.954L9.049.435zm3.61 3.611L8.708 8l3.954 3.954 2.904-2.905c.58-.58.58-1.519 0-2.098l-2.904-2.905zm-.706 8.614L8 8.708l-3.954 3.954 2.905 2.904c.58.58 1.519.58 2.098 0l2.905-2.904zm-8.614-.706L7.292 8 3.339 4.046.435 6.951c-.58.58-.58 1.519 0 2.098z" />
-                    </svg>
-                </button>
-            </div>
-
-            <div style={{ display: "flex", gap: 10 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={user?.picture} width={110} height={110} alt="" />
-                <div
-                    style={{ display: "flex", flexDirection: "column", gap: 3 }}
-                >
-                    <span
-                        style={{ fontSize: "30px" }}
-                        className={styles.userQC}
-                    >
-                        {user.displayName}
-                    </span>
-                    <span className={styles.userQC}>{user.customStatus}</span>
+                <div style={{ display: "flex", gap: 10 }}>
+                    <img src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${user?.picture}`} width={110} height={110} alt="" />
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <span
+                            style={{ fontSize: "30px" }}
+                            className={styles.userQC}
+                        >
+                            {user.displayName}
+                        </span>
+                        <span className={styles.userQC}>{user.customStatus}</span>
+                    </div>
                 </div>
             </div>
 
@@ -196,4 +186,13 @@ export function FloatingInput({
             />
         </div>
     );
+}
+
+export function AtlasInput({ title, onChange, value, readonly, onKeyDown }: { title?: string, onChange?: any, value?: any, readonly?: boolean, onKeyDown?: any }) {
+    return (
+        <div className={styles.spCustomInput}>
+            <p style={{ color: "gray", fontSize: "12px", width: "fit-content" }}>{title}</p>
+            <input value={value} onChange={onChange} type="text" style={{ fontSize: "17px" }} readOnly={readonly} onKeyDown={onKeyDown}/>
+        </div>
+    )
 }

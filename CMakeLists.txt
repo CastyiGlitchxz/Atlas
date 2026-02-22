@@ -12,7 +12,7 @@ find_package(PkgConfig REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 
 # Add executable first
-add_executable(atlas_server main.cpp database.cpp messaging.cpp server.cpp invites.cpp)
+add_executable(atlas_server main.cpp database.cpp messaging.cpp server.cpp invites.cpp filesystem.cpp)
 
 # Include directories
 target_include_directories(atlas_server PRIVATE 

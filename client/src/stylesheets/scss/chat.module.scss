@@ -1,15 +1,81 @@
 .main {
+    display: grid;
+    width: 95%;
+}
+
+.contextBar {
+    width: 100vw;
+    height: 4rem;
+    background: black;
+    display: flex;
+    align-items: center;
+    padding: 0px 34px;
+    gap: 12px;
+}
+
+.mainChat {
     display: flex;
     width: 95%;
 }
 
 #chat {
-    height: 92vh;
+    height: 85.5vh;
     overflow-y: scroll;
     padding: 2rem 2rem 5rem 2rem;
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+
+.serverNameText {
+    font-size: 20px;
+    font-weight: 530;
+}
+
+.serverSettingsButton {
+    background: none;
+    border: 1px solid gray;
+    display: flex;
+    align-items: center;
+    padding: 6px;
+    border-radius: 8px;
+}
+
+.serverSettingsButton:hover {
+    border: 1.7px solid #363636;
+    color: rgb(168, 200, 255);
+}
+
+.serverSettingsPanel {
+    position: fixed;
+    background: red;
+    width: 77vw;
+    height: 60vh;
+    border-radius: 20px;
+    z-index: 5;
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+}
+
+.serverSettingsTabs {
+    display: grid;
+    gap: 5px;
+    align-items: baseline;
+    align-content: baseline;
+    width: 200px;
+}
+
+.serverSettingsTabs button {
+    width: 100%;
+    height: 40px;
+    border-radius: 8px;
+    border: none;
+    text-align: left;
+    text-indent: 12px;
+    font-size: 17px;
+    font-weight: 550;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 .centerContainer {
@@ -74,6 +140,7 @@
 
 .messageContent img {
     border-radius: 100%;
+    object-fit: cover;
 }
 
 .messageContent:hover {
@@ -96,6 +163,7 @@
 .messageReference img {
     border-radius: 100%;
     border: 1px solid silver;
+    object-fit: cover;
 }
 
 .serverIcon {
@@ -206,6 +274,7 @@
 
 .userListUser img {
     border-radius: 100%;
+    object-fit: cover;
 }
 
 .userStatus {
@@ -283,10 +352,6 @@
     font-size: 15px;
     border-radius: 10px;
     outline: none;
-}
-
-.exploreScreen input[type="text"]:focus {
-    border: 1px solid gray;
 }
 
 .modelLongButton {

@@ -51,6 +51,7 @@
 .userPanel img {
     border: 3px solid gray;
     border-radius: 100%;
+    object-fit: cover;
 }
 
 .userPanel span {
@@ -59,6 +60,14 @@
     align-items: center;
     border-radius: 7px;
     height: 3rem;
+}
+
+.userPanelHeader {
+    display: flex;
+    background: none;
+    padding: 9px;
+    justify-content: space-between;
+    height: 60px;
 }
 
 .userRibbon {
@@ -96,15 +105,17 @@
 }
 
 .panelUserStatus {
-    transition: 1s ease-in-out;
-    align-items: center;
-    display: flex;
-    background: transparent;
+    background: #00000082;
     border: 1px solid gray;
-    gap: 6px;
-    padding: 5px 13px;
-    width: fit-content;
     border-radius: 10px;
+    align-items: center;
+    gap: 6px;
+    width: fit-content;
+    padding: 5px 13px;
+    transition: all 1s ease-in-out;
+    display: flex;
+    font-size: 17px;
+    font-weight: 520;
 }
 
 .panelUserStatus span {
@@ -112,6 +123,16 @@
     width: 8px;
     height: 8px;
     border-radius: 100%;
+}
+
+.panelUserCloseButton {
+    background: #0000006e;
+    padding: 10px;
+    border-radius: 17px;
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    border: none;
 }
 
 .userButtons {
@@ -124,4 +145,37 @@
     background: transparent;
     padding: 7px 20px;
     border-radius: 10px;
+}
+
+
+.spCustomInput {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    border: 1px solid gray;
+    width: 16.5rem;
+    padding: 8px;
+    border-radius: 12px;
+    min-width: 18.5rem;
+}
+
+.spCustomInput p {
+    width: 150px;
+}
+
+.spCustomInput select {
+    background: transparent;
+    width: 11rem;
+    border: 0;
+    font-size: 17px;
+    outline: none;
+}
+
+.spCustomInput input[type=text] {
+    height: fit-content;
+    width: fit-content;
+    outline: none;
+    border-radius: 6px;
+    background: transparent;
+    border: 0;
 }

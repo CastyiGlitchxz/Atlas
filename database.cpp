@@ -211,14 +211,18 @@ json get_user_all(const std::string& UUID) {
             std::string user_id = r[0]["user_id"].c_str();
             std::string pfp = r[0]["profile_picture"].c_str();
             std::string custom_status = r[0]["custom_status"].c_str();
+            std::string status = r[0]["appearance_status"].c_str();
             std::string bio = r[0]["bio"].c_str();
+            std::string email = r[0]["email"].c_str();
 
             return json{
                 {"username", username},
                 {"userid", user_id},
+                {"email", email},
                 {"displayName", displayname},
                 {"picture", pfp},
                 {"customStatus", custom_status},
+                {"status", status},
                 {"bio", bio}
             };
         }
@@ -281,6 +285,63 @@ std::string set_user_appearance_status(const std::string& UUID, const std::strin
         return r[0]["appearance_status"].as<std::string>();
     } catch (std::exception &e) {
         std::cout << e.what() << "\n";
-        return "";
+        return e.what();
     }
+}
+
+std::string set_user_profile_picture(const std::string& UUID, const std::string& picture_url) {
+    try {
+        Database db = connect_db();
+        auto& conn = db.getConnection();
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec_params("UPDATE users SET profile_picture = $1 WHERE user_id = $2 RETURNING profile_picture;", picture_url, UUID);
+
+        txn.commit();
+        return r[0]["profile_picture"].as<std::string>();
+    } catch (std::exception& e) {
+        std::cout << e.what() << "\n";
+        return e.what();
+    }
+}
+
+std::string generate_server_code(std::string& user_id, std::string& sid) {
+    try {
+        size_t length = 5;
+    
+        const std::string characters = 
+            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        
+        std::random_device rd;
+        std::mt19937 generator(rd());
+    
+        std::uniform_int_distribution<> distribution(0, characters.length() - 1);
+        
+        std::string code;
+        code.reserve(length);
+    
+        for (size_t i = 0; i < length; ++i) {
+            code += characters[distribution(generator)];
+        }
+
+        std::cout << "[Code] " << code << "\n";
+
+        Database db = connect_db();
+        auto& conn = db.getConnection();
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec(
+            "INSERT INTO server_invites (issued_by, code, expires, sid) VALUES (" +
+                txn.quote(user_id) + "," +
+                txn.quote(code) + "," +
+                txn.quote("2027-02-06 00:00:00") + "," +
+                txn.quote(sid) +
+            ")"
+        );
+
+        txn.commit();
+        return code;
+    } catch (std::exception& e) {
+        std::cout << e.what() << std::endl;
+    }
+    
+    return "";
 }

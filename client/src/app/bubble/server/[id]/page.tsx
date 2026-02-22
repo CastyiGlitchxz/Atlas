@@ -1,25 +1,28 @@
 'use client'
 import { getWebSocket } from "../../../../typescript/websocket";
-import React, { use, useState, useEffect, JSX , useRef, useContext, memo, useMemo } from "react"
+import React, { use, useState, useEffect, JSX , useRef, memo, useMemo } from "react"
 import { eventManager } from "../../../../typescript/eventsManager";
 import { construct_path, globals } from "../../../../typescript/env";
 import styles from "../../../../stylesheets/css/chat.module.css";
-import { get_token, open_profile } from "../../../../typescript/user";
-import { Profile } from "../../../..//typescript/interfaces";
+import { get_token } from "../../../../typescript/user";
+import { Profile, serverInfo } from "../../../..//typescript/interfaces";
 import { useRouter } from "next/navigation";
-import { ProfilePanel } from "../../layout";
 import Image from "next/image";
 import { messageFormat } from "../../../../typescript/interfaces";
 import { isSameChat, isHyperlink } from "../../../../typescript/chat";
+import { AtlasInput, Tab, Tabs, UserPanel } from "../../../components";
 
-function delete_message(message_id: string) {
-    const em = new eventManager();
-
+function delete_message(message_id: string, em: eventManager) {
     const token = get_token();
     if (!token) return;
 
     em.emitEvent("delete_message", { auth: token, message_id: message_id });
 };
+
+function create_server_invite_code(em: eventManager, sid: string) {
+    const token = get_token();
+    em.emitEvent('create_server_invite', { sid: sid, token: token });
+}
 
 const MessageItem = memo(({ 
     content, 
@@ -116,12 +119,14 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     const sid: string = id;
 
     const chatRef = useRef<HTMLDivElement>(null);
+    const messageBoxRef = useRef<HTMLTextAreaElement>(null);
     const [message, setMessage] = useState<string>("");
     const [chatContent, setChatContent] = useState<messageFormat[]>([]);
     const [userList, setUserList] = useState<{online: Profile[], offline: Profile[]}>({
         online: [],
         offline: []
     });
+    const [server, setServer] = useState<serverInfo | null>(null);
     const [messageMode, setMessageMode] = useState<string>("message");
     const [indicatorMessage, setIndicatorMessage] = useState<string>("");
     const [mid, setMid] = useState<number>(0);
@@ -130,12 +135,25 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
         userid: ""
     }});
     const [pageIndex, setPageIndex] = useState<number>(null);
-    const ctx = useContext(ProfilePanel);
-    
-    if (!ctx)
-        throw new Error("ProfilePanel must be used within a ProfilePanel.Provider");
+    const [selectedTab, setSelectedTab] = useState<number>(0);
+    const [serverSettings, setServerSettings] = useState<boolean>(false);
+    const [targetUser, setTargetUser] = useState<Profile | null>(null);
 
-    const { setPreview, setShowPreview } = ctx;
+    // useEffect(() => {
+    //     if (!messageBoxRef) return;
+
+    //     const handleKeyDown = (event) => {
+    //         if (event.key.length === 1) {
+    //             messageBoxRef.current.focus();
+    //         }
+    //     };
+
+    //     document.addEventListener('keydown', handleKeyDown);
+
+    //     return () => {
+    //         document.removeEventListener('keydown', handleKeyDown);
+    //     };
+    // }, []);
 
     useEffect(() => {
         (async () => {
@@ -150,6 +168,20 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
             const messages: messageFormat[] = data.messages;
 
             setChatContent(messages);
+        })();
+
+        (async () => {
+            const res = await fetch(construct_path("api/servers/server_info"), {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ sid: sid })
+            });
+            const data = await res.json();
+            console.log(data)
+            const server: serverInfo = data.server;
+            setServer(server);
         })();
     }, [sid]);
 
@@ -255,12 +287,10 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
 
         const handler = (msg: MessageEvent) => {
             const {event, data} = JSON.parse(msg.data);
-
             const message: messageFormat = data;
 
             switch(event) {
                 case "message":
-                    console.log(message);
                     if (isSameChat(message.serverID, sid) === false) return;
                     addMessageToChat(message);
                     break;
@@ -287,6 +317,14 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                     setUser(data);
                     break;
 
+                case "invite_create":
+                    navigator.clipboard.writeText(`https://localhost/invite?code=${data}`);
+                    break;
+
+                case "retreived_invites":
+                    console.log("Invites", data);
+                    break;
+
                 default:
                     break;
             };
@@ -298,6 +336,10 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
             ws.removeEventListener("message", handler);
         };
     }, [sid, userList, router]);
+
+    useEffect(() => {
+        em.emitEvent("get_invites", { sid: sid });
+    }, [])
 
     function edit_message(message_id: number, content: (string | JSX.Element)) {
         if (!token) return;   
@@ -350,6 +392,10 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     }, [chatContent]);
 
     useEffect(() => {
+        console.log(server);
+    }, [server]);
+
+    useEffect(() => {
         const container = chatRef.current;
         if (!container) return;
         
@@ -400,91 +446,133 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
 
     return (
         <div className={styles.main}>
-            <div className={styles.centerContainer}>
-                <div id={styles.chat} ref={chatRef}>
-                    {chatContent && chatContent.map((content) => (
-                        <MessageItem 
-                            key={content.id}
-                            content={content}
-                            refMsgData={content.messageRef ? messageMap.get(content.messageRef) : undefined}
-                            isCurrentUser={content.userID === user.author.userid}
-                            onEdit={() => {
-                                setMessage(content.content.toString());
-                                setIndicatorMessage("Editing message");
-                                setMessageMode("edit");
-                                setMid(content.id);
-                            }}
-                            onReply={() => {
-                                setMessageMode("reply");
-                                setIndicatorMessage("Replying to message");
-                                setMid(content.id);
-                            }}
-                            onDelete={() => delete_message(content.id.toString())}
-                        />
-                    ))}
-                </div>
+            <div className={styles.contextBar}>
+                <p className={styles.serverNameText}>{server !== null ? server.server_name : "Loading..."}</p>
+                <button className={styles.serverSettingsButton} onClick={() => setServerSettings(true)}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-sliders" viewBox="0 0 16 16">
+                        <path fillRule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z"/>
+                    </svg>
+                </button>
 
-                <div className={styles.messageItems}>
-                    <input type="file" id="fileUpload" hidden/>
-                    <span className={styles.fileUpload}>
-                        <label htmlFor="fileUpload">
-                            +
-                        </label>
-                    </span>
-
-                    {messageMode !== "message" &&
-                        <div className={styles.messageIndicator}>
-                            <p>{indicatorMessage}</p>
-                            <button onClick={() => {
-                                setMessageMode("message");
-                                setMessage("");
-                            }}>X</button>
-                        </div>
-                    }
-
-                    <div className={styles.messageBar}>
-                        <textarea placeholder="Type your message here" onInput={(e) => setMessage(e.currentTarget.value)} value={message} onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                sendMessage();
-                            }
-                        }}></textarea>
-                        <button onClick={sendMessage} className={styles.sendButton}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className="bi bi-send" viewBox="0 0 16 16">
-                                <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76z"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+                {/* <button onClick={() => create_server_invite_code(em, sid)} style={{ padding: "6px", borderRadius: "8px", border: 0, backgroundColor: "#353535", fontWeight: 650, fontSize: "16px" }}>Generate invite code</button> */}
             </div>
 
-            <div className={styles.userList}>
-                <p>Online -- {userList.online.length}</p>
-                {userList.online.map((user, index) => (
-                    <div key={index} className={styles.userListUser} onClick={() => open_profile(user, setPreview, setShowPreview)}>
-                        <div style={{position: "relative"}}>
-                            <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${user["picture"]}`} alt="" width={50} height={50} unoptimized quality={1}/>
-                            <span className={`${styles.si} ${styles[user["status"]]}`}></span>
-                        </div>
-                        <div>
-                            <p>{user.displayName}</p>
-                            <p className={styles.userStatus}>{user.customStatus}</p>
+            {serverSettings === true &&
+                <div className={styles.serverSettingsPanel}>
+                    <div className={styles.serverSettingsTabs}>
+                        <button onClick={() => setSelectedTab(0)}>Server</button>
+                        <button onClick={() => setSelectedTab(1)}>Invites</button>
+                    </div>
+
+                    <Tabs selectedTab={selectedTab}>
+                        <Tab>
+                            <AtlasInput title="Server Name" value={server.server_name} onChange={(e) => setServer(prev => ({
+                                ...prev,
+                                server_name: e.target.value
+                            }))}/>
+                            <AtlasInput title="Server Owner" value={server.owner.username} readonly/>
+                        </Tab>
+
+                        <Tab>
+                            <button>Create invite</button>
+
+                            <ul>
+                                <li>Me</li>
+                            </ul>
+                        </Tab>
+                    </Tabs>
+                </div>
+            }
+
+            <div className={styles.mainChat}>
+                <div className={styles.centerContainer}>
+                    <div id={styles.chat} ref={chatRef}>
+                        {chatContent && chatContent.map((content) => (
+                            <MessageItem 
+                                key={content.id}
+                                content={content}
+                                refMsgData={content.messageRef ? messageMap.get(content.messageRef) : undefined}
+                                isCurrentUser={content.userID === user.author.userid}
+                                onEdit={() => {
+                                    setMessage(content.content.toString());
+                                    setIndicatorMessage("Editing message");
+                                    setMessageMode("edit");
+                                    setMid(content.id);
+                                }}
+                                onReply={() => {
+                                    setMessageMode("reply");
+                                    setIndicatorMessage("Replying to message");
+                                    setMid(content.id);
+                                }}
+                                onDelete={() => delete_message(content.id.toString(), em)}
+                            />
+                        ))}
+                    </div>
+
+                    <div className={styles.messageItems}>
+                        <input type="file" id="fileUpload" hidden/>
+                        <span className={styles.fileUpload}>
+                            <label htmlFor="fileUpload">
+                                +
+                            </label>
+                        </span>
+
+                        {messageMode !== "message" &&
+                            <div className={styles.messageIndicator}>
+                                <p>{indicatorMessage}</p>
+                                <button onClick={() => {
+                                    setMessageMode("message");
+                                    setMessage("");
+                                }}>X</button>
+                            </div>
+                        }
+
+                        <div className={styles.messageBar}>
+                            <textarea placeholder="Type your message here" onInput={(e) => setMessage(e.currentTarget.value)} value={message} ref={messageBoxRef} onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    sendMessage();
+                                }
+                            }}></textarea>
+                            <button onClick={sendMessage} className={styles.sendButton}>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className="bi bi-send" viewBox="0 0 16 16">
+                                    <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76z"/>
+                                </svg>
+                            </button>
                         </div>
                     </div>
-                ))}
-                <p>Offline -- {userList.offline.length}</p>
-                {userList.offline.map((user, index) => (
-                    <div key={index} className={styles.userListUser} onClick={() => open_profile(user, setPreview, setShowPreview)}>
-                        <div style={{position: "relative"}}>
-                            <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${user["picture"]}`} alt="" width={50} height={50} unoptimized quality={1}/>
-                            <span className={`${styles.si} ${styles[user["status"]]}`}></span>
+                </div>
+
+                <div className={styles.userList}>
+                    <p><strong>Online -- {userList.online.length}</strong></p>
+                    {userList.online.map((user, index) => (
+                        <div key={index} className={styles.userListUser} onClick={() => setTargetUser(user)}>
+                            <div style={{position: "relative"}}>
+                                <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${user["picture"]}`} alt="" width={50} height={50} unoptimized quality={1}/>
+                                <span className={`${styles.si} ${styles[user["status"]]}`}></span>
+                            </div>
+                            <div>
+                                <p>{user.displayName}</p>
+                                <p className={styles.userStatus}>{user.customStatus}</p>
+                            </div>
                         </div>
-                        <div>
-                            <p>{user.displayName}</p>
-                            <p className={styles.userStatus}>{user.customStatus}</p>
+                    ))}
+                    <p><strong>Offline -- {userList.offline.length}</strong></p>
+                    {userList.offline.map((user, index) => (
+                        <div key={index} className={styles.userListUser} onClick={() => setTargetUser(user)}>
+                            <div style={{position: "relative"}}>
+                                <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${user["picture"]}`} alt="" width={50} height={50} unoptimized quality={1}/>
+                                <span className={`${styles.si} ${styles[user["status"]]}`}></span>
+                            </div>
+                            <div>
+                                <p>{user.displayName}</p>
+                                <p className={styles.userStatus}>{user.customStatus}</p>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
+                
+                {targetUser !== null && <UserPanel user={targetUser} setTargetUser={setTargetUser}/>}
             </div>
         </div>
     )

@@ -7,11 +7,18 @@ export interface serverFormat {
 export interface Account {
     username: string;
     userid: string;
+    email: string
 };
+
+export enum appearanceStatus {
+    "online",
+    "idle",
+    "offline"
+}
 
 export interface Profile {
     displayName: string;
-    status: "online" | "offline" | "idle";
+    status: appearanceStatus | ("online" | "offline" | "idle");
     picture?: string;
     customStatus?: string;
     userid: string;
@@ -38,3 +45,12 @@ export interface loginResponse {
     };
     error?: string;
 };
+
+export interface serverInfo {
+    icon: (null | string);
+    owner: {
+        user_id: string;
+        username: string;
+    }
+    server_name: string;
+}
