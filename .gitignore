@@ -4,8 +4,10 @@
 voice_engine/
 
 # Not to be commited for a reason
-config/
+config/cenv
+config/app-config.yml
 assets/
+voice_system/
 
 # vscode
 .vscode
@@ -17,3 +19,4 @@ build/
 
 .DS_Store
 node_modules
+.venv

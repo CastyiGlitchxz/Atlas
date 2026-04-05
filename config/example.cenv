@@ -1,0 +1,15 @@
+% database %
+
+dbname    | <database name>
+user      | <database user>
+password  | <database user password>
+host      | <database address/ip/url>
+
+% secrets %
+
+securekey | <custom key>
+
+% hooks %
+( Use only if you plan to use Discord in tandem with Atlas )
+
+webhook_key | <webhook api key>

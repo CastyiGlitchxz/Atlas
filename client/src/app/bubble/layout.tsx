@@ -91,13 +91,13 @@ export default function RootLayout({
         };
     }, []);
     
-    useEffect(() => {
-        const token = get_token();
+    // useEffect(() => {
+    //     const token = get_token();
 
-        window.onbeforeunload = function() {
-            em.emitEvent("update_status", { auth: token, status: "offline" });
-        }
-    });
+    //     window.onbeforeunload = function() {
+    //         em.emitEvent("update_status", { auth: token, status: "offline" });
+    //     }
+    // });
 
     useEffect(() => {
         (async () => {
@@ -208,51 +208,43 @@ export default function RootLayout({
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-sliders" viewBox="0 0 16 16">
                         <path fillRule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z"/>
                     </svg>
-                    {/* Settings */}
                 </button>
             </div>
 
             {children}
 
-            {promptVisibility === "visible" ? 
+            {promptVisibility === "visible" && 
                 <div className={styles.exploreScreen}>
                     <div className={styles.serverHubHeader}>
                         <h2>Server Hub</h2>
+                        {selectedTab === 0 ?
                         <button onClick={() => setPromptVisibility("hidden")} className={styles.closeButton}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" className="bi bi-x-circle" viewBox="0 0 16 16">
                                 <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"/>
                                 <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708"/>
                             </svg>
                         </button>
-                    </div>
-                    {/* <div className={styles.toggleButton}>
-                        <button className={styles.selected} onClick={() => setPromptTab("create")}>Create</button>
-                        <button onClick={() => setPromptTab("join")}>Join</button>
-                    </div> */}
-
-                    <div className={styles.serverHubContent}>
-                        <span className={styles.modelLongButton} onClick={() => setSelectedTab(0)}>
-                            <h4>Create Server</h4>
-                            <p>Create your own server for a community or friends</p>
-                        </span>
-
-                        <span className={styles.modelLongButton} onClick={() => setSelectedTab(1)}>
-                            <h4>Join Server</h4>
-                            <p>Find random servers to join or provide an invite code</p>
-                        </span>
+                        : <button onClick={() => setSelectedTab(0)}>Back</button>}
                     </div>
 
-                    <div className={styles.serverHubFooter}>
+                    <Tabs selectedTab={selectedTab} className={styles.serverHubContent}>
+                        <Tab style={{ height: "100%", alignContent: "center", gap: "18px", display: "grid" }}>
+                            <span className={styles.modelLongButton} onClick={() => setSelectedTab(1)}>
+                                <h4>Create Server</h4>
+                                <p>Create your own server for a community or friends</p>
+                            </span>
 
-                    </div>
-
-                    <Tabs selectedTab={selectedTab}>
+                            <span className={styles.modelLongButton} onClick={() => setSelectedTab(2)}>
+                                <h4>Join Server</h4>
+                                <p>Find random servers to join or provide an invite code</p>
+                            </span>
+                        </Tab>
+                        
                         <Tab>
                             <AtlasInput title="Server Name" value={server.name} onChange={(e) => setServer(prev => ({
                                 ...prev,
                                 name: e.target.value
                             }))}/>
-                            <button onClick={() => create_server()}>Create Server</button>
                         </Tab>
 
                         <Tab>
@@ -263,9 +255,13 @@ export default function RootLayout({
                             }}/>
                         </Tab>
                     </Tabs>
+
+                    <div className={styles.serverHubFooter}>
+                        {selectedTab === 1 && <button onClick={() => create_server()}>Create Server</button>}
+                        {selectedTab === 2 && <button>Explore Servers</button>}
+                        {selectedTab === 2 && <button>Join Server</button>}
+                    </div>
                 </div>
-                :
-                ""
             }
         </div>
     );

@@ -5,6 +5,8 @@
 /src/stylesheets/css
 /src/app/test
 
+/src/secrets
+
 # testing
 /coverage
 

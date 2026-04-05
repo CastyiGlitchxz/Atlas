@@ -12,7 +12,7 @@ import { messageFormat } from "../../../../typescript/interfaces";
 import { isSameChat, isHyperlink } from "../../../../typescript/chat";
 import { AtlasInput, Tab, Tabs, UserPanel } from "../../../components";
 
-function delete_message(message_id: string, em: eventManager) {
+function delete_message(message_id: number, em: eventManager) {
     const token = get_token();
     if (!token) return;
 
@@ -89,9 +89,27 @@ const MessageItem = memo(({
                 </div>
 
                 <div className={styles.messageStateItems}>
-                    {isCurrentUser && <button onClick={onEdit}>Edit</button>}
-                    <button onClick={onReply}>Reply</button>
-                    {isCurrentUser && <button onClick={onDelete}>Delete</button>}
+                    {isCurrentUser &&
+                        <button onClick={onEdit}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-pencil-square" viewBox="0 0 16 16">
+                                <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
+                                <path fillRule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/>
+                            </svg>
+                        </button>
+                    }
+                    <button onClick={onReply}>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-reply" viewBox="0 0 16 16">
+                            <path d="M6.598 5.013a.144.144 0 0 1 .202.134V6.3a.5.5 0 0 0 .5.5c.667 0 2.013.005 3.3.822.984.624 1.99 1.76 2.595 3.876-1.02-.983-2.185-1.516-3.205-1.799a8.7 8.7 0 0 0-1.921-.306 7 7 0 0 0-.798.008h-.013l-.005.001h-.001L7.3 9.9l-.05-.498a.5.5 0 0 0-.45.498v1.153c0 .108-.11.176-.202.134L2.614 8.254l-.042-.028a.147.147 0 0 1 0-.252l.042-.028zM7.8 10.386q.103 0 .223.006c.434.02 1.034.086 1.7.271 1.326.368 2.896 1.202 3.94 3.08a.5.5 0 0 0 .933-.305c-.464-3.71-1.886-5.662-3.46-6.66-1.245-.79-2.527-.942-3.336-.971v-.66a1.144 1.144 0 0 0-1.767-.96l-3.994 2.94a1.147 1.147 0 0 0 0 1.946l3.994 2.94a1.144 1.144 0 0 0 1.767-.96z"/>
+                        </svg>
+                    </button>
+                    {isCurrentUser &&
+                        <button onClick={onDelete}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-trash" viewBox="0 0 16 16">
+                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z"/>
+                                <path d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z"/>
+                            </svg>
+                        </button>
+                    }
                 </div>
             </div>
         </div>
@@ -138,6 +156,8 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     const [selectedTab, setSelectedTab] = useState<number>(0);
     const [serverSettings, setServerSettings] = useState<boolean>(false);
     const [targetUser, setTargetUser] = useState<Profile | null>(null);
+    const [serverCodes, setServerCodes] = useState<{issued_by: string, invite_code: string}[] | null>(null);
+    const [serverLoaded, setServerLoaded] = useState<boolean>(false);
 
     // useEffect(() => {
     //     if (!messageBoxRef) return;
@@ -156,6 +176,27 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     // }, []);
 
     useEffect(() => {
+        (async () => {
+            const res = await fetch(construct_path("api/user_access_status"), {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    sid: sid,
+                    token: token
+                })
+            });
+            const result = await res.json();
+
+            if  (result === false || result === undefined || result === null)
+                router.replace("/bubble");
+
+            setServerLoaded(true);
+        })();
+
+        if (!serverLoaded) return;
+
         (async () => {
             const res = await fetch(construct_path("api/messages_get"), {
                 method: "POST",
@@ -179,11 +220,11 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                 body: JSON.stringify({ sid: sid })
             });
             const data = await res.json();
-            console.log(data)
+            console.log("Server data: ", data)
             const server: serverInfo = data.server;
             setServer(server);
         })();
-    }, [sid]);
+    }, [sid, serverLoaded]);
 
     useEffect(() => {
         (async () => {
@@ -202,7 +243,6 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
         
         switch (messageMode) {
             case "message":
-                triggerNotification(message);
                 em.emitEvent("send_message", {
                     token: token,
                     sid: sid,
@@ -220,21 +260,12 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                 break;
                     
             default:                  
-                triggerNotification(message);
                 em.emitEvent("send_message", {token: token, sid: sid, message: message});
                 break;
         }
 
         setMessage("");
     }
-
-    function triggerNotification(content: string) {
-        if (!("Notification" in window)) {
-            return;
-        };
-
-        em.emitEvent("schedule_notification", { token: token, content: content, sid: sid });
-    };
     
     useEffect(() => {
         const ws = getWebSocket();
@@ -255,7 +286,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                 }
 
                 const existingUser = userOnline || userOffline;
-                if (!existingUser) return prev; // User not found, do nothing
+                if (!existingUser) return prev;
 
                 const updatedUser = { ...existingUser, status };
 
@@ -318,11 +349,22 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                     break;
 
                 case "invite_create":
-                    navigator.clipboard.writeText(`https://localhost/invite?code=${data}`);
+                    console.log(data);
+                    setServerCodes(prev => {
+                        if (prev) {
+                            return [...prev, data]
+                        } else {
+                            return [{
+                                "issued_by": "",
+                                "invite_code": data
+                            }];
+                        }
+                    });
                     break;
 
                 case "retreived_invites":
                     console.log("Invites", data);
+                    setServerCodes(data.codes);
                     break;
 
                 default:
@@ -447,40 +489,52 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     return (
         <div className={styles.main}>
             <div className={styles.contextBar}>
-                <p className={styles.serverNameText}>{server !== null ? server.server_name : "Loading..."}</p>
+                <p className={styles.serverNameText}>{server === undefined || server === null ? "Loading..." : server.server_name}</p>
                 <button className={styles.serverSettingsButton} onClick={() => setServerSettings(true)}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-sliders" viewBox="0 0 16 16">
                         <path fillRule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z"/>
                     </svg>
                 </button>
-
-                {/* <button onClick={() => create_server_invite_code(em, sid)} style={{ padding: "6px", borderRadius: "8px", border: 0, backgroundColor: "#353535", fontWeight: 650, fontSize: "16px" }}>Generate invite code</button> */}
             </div>
 
             {serverSettings === true &&
                 <div className={styles.serverSettingsPanel}>
-                    <div className={styles.serverSettingsTabs}>
-                        <button onClick={() => setSelectedTab(0)}>Server</button>
-                        <button onClick={() => setSelectedTab(1)}>Invites</button>
+                    <div className={styles.serverSettingsFlexbox}>
+                        <div className={styles.serverSettingsTabs}>
+                            <button onClick={() => setSelectedTab(0)}>Server</button>
+                            <button onClick={() => setSelectedTab(1)}>Invites</button>
+                            <button onClick={() => setSelectedTab(2)}>Users</button>
+                        </div>
+
+                        <Tabs selectedTab={selectedTab}>
+                            <Tab className={styles.serverSettingsSettingsContent}>
+                                <AtlasInput title="Server Name" value={server.server_name} onChange={(e) => setServer(prev => ({
+                                    ...prev,
+                                    server_name: e.target.value
+                                }))}/>
+                                <AtlasInput title="Server Owner" value={server.owner.username} readonly/>
+                            </Tab>
+
+                            <Tab className={styles.serverSettingsSettingsContent}>
+                                <button onClick={() => create_server_invite_code(em, sid)}>Create invite</button>
+
+                                <ul>
+                                    {serverCodes !== null && serverCodes !== undefined && serverCodes.map((code, index) => (
+                                        <div key={index}>
+                                            <li key={index}>{code.invite_code}</li>
+                                            <button onClick={() => {
+                                                navigator.clipboard.writeText(`https://localhost/invite?code=${code.invite_code}`);
+                                            }}>Share</button>
+                                        </div>
+                                    ))}
+                                </ul>
+                            </Tab>
+                        </Tabs>
                     </div>
 
-                    <Tabs selectedTab={selectedTab}>
-                        <Tab>
-                            <AtlasInput title="Server Name" value={server.server_name} onChange={(e) => setServer(prev => ({
-                                ...prev,
-                                server_name: e.target.value
-                            }))}/>
-                            <AtlasInput title="Server Owner" value={server.owner.username} readonly/>
-                        </Tab>
-
-                        <Tab>
-                            <button>Create invite</button>
-
-                            <ul>
-                                <li>Me</li>
-                            </ul>
-                        </Tab>
-                    </Tabs>
+                    <div className={styles.serverSettingsFooter}>
+                        <button>Update</button>
+                    </div>
                 </div>
             }
 
@@ -504,7 +558,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                                     setIndicatorMessage("Replying to message");
                                     setMid(content.id);
                                 }}
-                                onDelete={() => delete_message(content.id.toString(), em)}
+                                onDelete={() => delete_message(content.id, em)}
                             />
                         ))}
                     </div>
@@ -544,7 +598,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                 </div>
 
                 <div className={styles.userList}>
-                    <p><strong>Online -- {userList.online.length}</strong></p>
+                    <strong>Online -- {userList.online.length}</strong>
                     {userList.online.map((user, index) => (
                         <div key={index} className={styles.userListUser} onClick={() => setTargetUser(user)}>
                             <div style={{position: "relative"}}>
@@ -552,7 +606,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                                 <span className={`${styles.si} ${styles[user["status"]]}`}></span>
                             </div>
                             <div>
-                                <p>{user.displayName}</p>
+                                <strong>{user.displayName}</strong>
                                 <p className={styles.userStatus}>{user.customStatus}</p>
                             </div>
                         </div>
@@ -565,7 +619,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                                 <span className={`${styles.si} ${styles[user["status"]]}`}></span>
                             </div>
                             <div>
-                                <p>{user.displayName}</p>
+                                <strong>{user.displayName}</strong>
                                 <p className={styles.userStatus}>{user.customStatus}</p>
                             </div>
                         </div>

@@ -1,0 +1,39 @@
+.bubble_root {
+    display: flex;
+    gap: 12px;
+}
+
+.bubble_pms_list {
+    background: rgb(26, 26, 26);
+    height: 100vh;
+    width: 18rem;
+    padding: 12px 5px;
+}
+
+.bubble_friend {
+    display: flex;
+    background: rgb(0, 0, 0);
+    width: 50rem;
+    height: 4rem;
+    align-items: center;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 0px 18px;
+    border-radius: 6px;
+}
+
+.bubble_friend_userinfo {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.bubble_friend_userinfo img {
+    width: 45px;
+    height: 45px;
+    border-radius: 100%;
+}
+
+.bubble_friend_options {
+
+}

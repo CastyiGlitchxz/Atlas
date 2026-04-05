@@ -1,6 +1,6 @@
 import { Profile } from "../typescript/interfaces";
 import styles from "../stylesheets/css/components.module.css";
-import React, { Dispatch, ReactNode, SetStateAction, useState } from "react";
+import React, { CSSProperties, Dispatch, ReactNode, SetStateAction, useState } from "react";
 import { globals } from "../typescript/env";
 
 export function UserPanel({ user, setTargetUser }: { user: Profile, setTargetUser: Dispatch<SetStateAction<Profile | null>> }) {
@@ -137,14 +137,16 @@ export function TabTitle({
 export function Tabs({
     children,
     selectedTab,
+    className
 }: {
     children: ReactNode[];
     selectedTab: number;
+    className?: string;
 }) {
     // const [selectedTab, setSelectedTab] = useState(0);
 
     return (
-        <div>
+        <div className={className}>
             {/* {children.map((item, index) => (
                 <TabTitle title={item.props.title} key={index} index={index} setSelectedTab={setSelectedTab}/>
             ))} */}
@@ -154,8 +156,8 @@ export function Tabs({
     );
 }
 
-export function Tab({ children }: { children: ReactNode }) {
-    return <div>{children}</div>;
+export function Tab({ children, className, style }: { children: ReactNode, className?: string | undefined, style?: CSSProperties | undefined }) {
+    return <div className={className} style={style}>{children}</div>;
 }
 
 export function FloatingInput({

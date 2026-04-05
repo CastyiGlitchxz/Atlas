@@ -1,3 +1,4 @@
+#include <exception>
 #include <iostream>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
@@ -7,6 +8,7 @@
 #include <nlohmann/json.hpp>
 #include "headers/abstract.hpp"
 #include <argon2.h>
+#include <pqxx/internal/statement_parameters.hxx>
 #include <random>
 #include <string>
 
@@ -254,7 +256,7 @@ json user_get_all_servers(const std::string& UUID) {
 
         for (auto row : r) {
             std::string serverId = row["server_id"].as<std::string>();
-            std::string serverName = row["server_name"].c_str();  // or row["name"].as<std::string>()
+            std::string serverName = row["server_name"].c_str();
             std::string owner = row["owner"].c_str();
             response["servers"].push_back({
                 {"name", serverName},
@@ -268,6 +270,35 @@ json user_get_all_servers(const std::string& UUID) {
         response["error"] = 404;
         response["what"] = e.what();
         std::cout << e.what() << "\n";
+    }
+
+    return response;
+}
+
+json lookat_user(std::string& username) {
+    json response;
+
+    try {
+        Database db = connect_db();
+        auto& conn = db.getConnection();
+        
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec_params(
+            "SELECT displayname, profile_picture, bio FROM users WHERE username = $1",
+            username
+        );
+
+        std::string displayName = r[0]["displayName"].as<std::string>();
+        std::string avatar = r[0]["profile_picture"].as<std::string>();
+        std::string bio = r[0]["bio"].as<std::string>();
+
+        response["user"] = {
+            {"displayName", displayName},
+            {"avatar", avatar},
+            {"bio", bio}
+        };
+    } catch (std::exception& e) {
+        response["error"] = e.what();
     }
 
     return response;

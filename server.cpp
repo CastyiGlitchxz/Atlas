@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <optional>
+#include <pqxx/internal/result_iter.hxx>
 #include <string>
 
 using json = nlohmann::json;
@@ -67,7 +68,7 @@ json get_all_invite_codes(std::string& serverID) {
         pqxx::result r = txn.exec_params("SELECT * FROM server_invites WHERE sid = $1", serverID);
 
         if (r.empty()) {
-            return {"message", "No invite codes"};
+            return response["message"] = "No invite codes";
         } else {
 
             for (auto row : r) {
@@ -116,13 +117,34 @@ json get_server(const std::string server_id) {
                     {"user_id", user_id},
                     {"username", username}
                 }},
-                {"icon", icon},
+                {"icon", icon ? json(*icon) : json(nullptr)}
             };
-            response["status"] = 200;
         }
     } catch (std::exception &e) {
         response["status"] = "failed";
         std::cout << e.what() << "\n";
+    }
+
+    return response;
+}
+
+json check_user_in_server(std::string& UUID, std::string& serverID) {
+    json response;
+
+    try {
+        Database db = connect_db();
+        auto& conn = db.getConnection();
+
+        pqxx::work txn(conn);
+        pqxx::result r = txn.exec_params("SELECT 1 FROM user_servers WHERE uid = $1 AND sid = $2 LIMIT 1", UUID, serverID);
+
+        bool result = !r.empty();
+        response = result;
+
+    } catch (std::exception& e) {
+        std::cout << e.what() << std::endl;
+        response["what"] = e.what();
+        response["result"] = false;
     }
 
     return response;

@@ -4,14 +4,11 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/core/detail/base64.hpp>
-#include <cstddef>
 #include <exception>
 #include <iostream>
 #include <random>
-#include <stdexcept>
 #include <string>
 #include <map>
-#include <functional>
 #include <thread>
 #include <chrono>
 #include <nlohmann/json.hpp>
@@ -77,28 +74,6 @@ inline WebSocketSessionManager g_sessions;
 using HttpRoute = std::function<http::response<http::string_body>(const http::request<http::string_body>&)>;
 
 //------------------------------------------------------------
-// Helper to send HTTP JSON response (with added CORS headers)
-//------------------------------------------------------------
-void send_json_response(tcp::socket& socket,
-                        const http::request<http::string_body>& req,
-                        const json& j,
-                        http::status status = http::status::ok)
-{
-    http::response<http::string_body> res{status, req.version()};
-    res.set(http::field::server, "Boost.Beast");
-    res.set(http::field::content_type, "application/json");
-
-    res.set(http::field::access_control_allow_origin, "http://localhost:3000");
-    res.set(http::field::access_control_allow_credentials, "true");
-    res.set(http::field::access_control_allow_methods, "GET, POST, OPTIONS");
-    res.set(http::field::access_control_allow_headers, "Content-Type, Authorization");
-
-    res.body() = j.dump();
-    res.prepare_payload();
-    http::write(socket, res);
-}
-
-//------------------------------------------------------------
 // Handle regular HTTP requests
 //------------------------------------------------------------
 void handle_http(tcp::socket& socket,
@@ -108,35 +83,34 @@ void handle_http(tcp::socket& socket,
     // 1. Get the requested path
     std::string path{req.target().data(), req.target().size()};
 
-    // 🔥 CATCH THE OPTIONS (PREFLIGHT) REQUEST FIRST 🔥
+    // CATCH THE OPTIONS (PREFLIGHT) REQUEST FIRST
     if (req.method() == http::verb::options) {
         http::response<http::empty_body> res{http::status::ok, req.version()};
         res.set(http::field::server, "Boost.Beast");
 
-        // The browser is hitting 100.95.199.94:8080 from localhost:3000
-        res.set(http::field::access_control_allow_origin, "*"); 
+        res.set(http::field::access_control_allow_origin, "*");
         res.set(http::field::access_control_allow_credentials, "true");
         res.set(http::field::access_control_allow_methods, "GET, POST, OPTIONS");
-        res.set(http::field::access_control_allow_headers, "Content-Type, Authorization"); 
+        res.set(http::field::access_control_allow_headers, "Content-Type, Authorization");
         res.set(http::field::access_control_max_age, "86400"); // Cache preflight result
 
         // Send the empty response immediately
         http::write(socket, res);
-        return; 
+        return;
     }
-    
+
     // 2. Handle Actual Request (GET, POST, etc.)
     auto it = routes.find(path);
-    http::response<http::string_body> res; 
+    http::response<http::string_body> res;
 
     if (it != routes.end()) {
         // Route handler returns the final response object (with cookies/body)
-        res = it->second(req); 
+        res = it->second(req);
     } else {
-        // Handle 404 Not Found 
+        // Handle 404 Not Found
         json response_body;
         response_body["error"] = "Endpoint not found";
-        
+
         res.result(http::status::not_found);
         res.set(http::field::server, "Boost.Beast");
         res.set(http::field::content_type, "application/json");
@@ -144,9 +118,9 @@ void handle_http(tcp::socket& socket,
         res.prepare_payload();
     }
 
-    res.set(http::field::access_control_allow_origin, "*"); 
+    res.set(http::field::access_control_allow_origin, "*");
     res.set(http::field::access_control_allow_credentials, "true");
-    
+
     // Write the resulting response
     http::write(socket, res);
 }
@@ -154,7 +128,7 @@ void handle_http(tcp::socket& socket,
 std::string decode_token(const std::string& token) {
     auto decoded = jwt::decode(token);
     jwt::verify().allow_algorithm(jwt::algorithm::hs256{secret}).verify(decoded);
-    
+
     return decoded.get_subject();
 };
 
@@ -170,6 +144,8 @@ json create_server(const std::string serverName, const std::string UUID);
 std::string set_user_profile_picture(const std::string& UUID, const std::string& picture_url);
 std::string generate_server_code(std::string& user_id, std::string& sid);
 json get_all_invite_codes(std::string& serverID);
+json lookat_user(std::string& username);
+json check_user_in_server(std::string& UUID, std::string& serverID);
 
 std::string get_user_id_from_cookie(const http::request<http::string_body>& req) {
     if (!req.count(http::field::cookie)) {
@@ -212,17 +188,17 @@ std::string parse_bearer_token(const http::request<http::string_body>& req) {
 
     auto decoded = jwt::decode(token);
     jwt::verify().allow_algorithm(jwt::algorithm::hs256{secret}).verify(decoded);
-    
+
     // Return the subject (user ID)
     return decoded.get_subject();
 }
 
-int discord_sendM(const std::string& username, const std::string& message, const std::string& avatar_url) {        
+int discord_send_message(const std::string& username, const std::string& message, const std::string& avatar_url) {
     try {
         const std::string host = "discord.com";
         const std::string port = "443";
         std::string target = cenv.find_token("hooks", "webhook_key");
-            
+
         int version = 11;
 
         json body = {
@@ -293,23 +269,23 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
 
         eventHandlers["send_message"] = [&](const json& data) {
             http::response<http::string_body> res{http::status::unauthorized, req.version()};
-            
+
             std::string content = data.value("message", "");
             std::string sid = data.value("sid", "");
             std::string token = data.value("token", "");
 
             std::string user_id = decode_token(token);
-            
+
             json user = get_user_all(user_id);
             std::string picture = user.value("picture", "");
             std::string displayName = user.value("displayName", "");
 
-            std::optional<std::string> link = (data.contains("link") && !data["link"].is_null()) 
-            ? std::make_optional(data["link"].get<std::string>()) 
+            std::optional<std::string> link = (data.contains("link") && !data["link"].is_null())
+            ? std::make_optional(data["link"].get<std::string>())
             : std::nullopt;
-            
+
             std::optional<int> mRef;
-            
+
             MessageFormat message {
                 .serverID = sid,
                 .content = content,
@@ -322,7 +298,7 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
             std::string time = message_object.value("timestamp", "");
 
             if (content.starts_with("[discord] ")) {
-                discord_sendM(displayName, content, picture);
+                discord_send_message(displayName, content, picture);
             }
 
             json jdata;
@@ -342,6 +318,20 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
 
             std::cout << "[Broadcast] " << content << "\n";
 
+            json notification = {
+                {"event", "notification"},
+                {"data", {
+                    {"sender", {
+                        {"token", token},
+                        {"displayName", displayName},
+                        {"message", content},
+                        {"picture", picture}
+                    }},
+                    {"serverID", sid}
+                }}
+            };
+
+            g_sessions.broadcast(notification);
             g_sessions.broadcast(msg);
 
             return json{
@@ -351,16 +341,16 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
         };
 
         eventHandlers["delete_message"] = [&](const json& data) {
-            std::string message_id = data.value("message_id", "");
+            int message_id = data.value("message_id", 0);
 
-            delete_message(std::stoi(message_id));
+            delete_message(message_id);
 
             json msg = {
                 {"event", "message_deleted"},
                 {"data", {
                         {"success", true},
                         {"message", "Message deleted from chat"},
-                        {"id", std::stoi(message_id)}
+                        {"id", message_id}
                     }
                 }
             };
@@ -407,11 +397,11 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
             std::string content = data.value("content", "");
             std::string sid = data.value("sid", "");
             std::string token = data.value("token", "");
-            
+
             std::string user_id = decode_token(token);
 
-            std::optional<std::string> link = (data.contains("link") && !data["link"].is_null()) 
-            ? std::make_optional(data["link"].get<std::string>()) 
+            std::optional<std::string> link = (data.contains("link") && !data["link"].is_null())
+            ? std::make_optional(data["link"].get<std::string>())
             : std::nullopt;
 
             MessageFormat message {
@@ -470,41 +460,6 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
             };
         };
 
-        eventHandlers["schedule_notification"] = [&](const json& data) {
-            http::response<http::string_body> res{http::status::unauthorized, req.version()};
-
-            std::string content = data.value("content", "");
-            std::string token = data.value("token", "");
-            std::string serverID = data.value("sid", "");
-            std::string user_id = decode_token(token);
-
-            json user = get_user_all(user_id);
-
-            std::string displayname = user.value("displayName", "");
-            std::string pfp = user.value("picture", "");
-            std::string username = user.value("username", "");
-
-            json notification = {
-                {"event", "notification"},
-                {"data", {
-                    {"sender", {
-                        {"token", token},
-                        {"displayName", displayname},
-                        {"message", content},
-                        {"picture", pfp}
-                    }},
-                    {"serverID", serverID}
-                }}
-            };
-
-            g_sessions.broadcast(notification);
-
-            return json{
-                {"event", "ack"},
-                {"data", {{"message", "text"}}}
-            };
-        };
-
         eventHandlers["upload_profile"] = [&](const json& data) {
             std::cout << data << "e";
 
@@ -515,7 +470,7 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
             std::string token = data.value("token", "");
             std::string user_id = decode_token(token);
             json user = get_user_all(user_id);
- 
+
             return json{
                 {"event", "return_user"},
                 {"data", {
@@ -530,7 +485,7 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
         eventHandlers["update_status"] = [&](const json& data) {
             std::string token = data.value("auth", "");
             std::string status = data.value("status", "");;
-            
+
             std::string user_id = decode_token(token);
 
             std::string update_type = set_user_appearance_status(user_id, status);
@@ -569,7 +524,7 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
                 std::string sid = response.value("sid", "");
                 std::string username = get_user_all(user_id).value("username", "");
                 std::string server_name = get_server(sid)["server"].value("server_name", "");
-    
+
                 return json{
                     {"event", "invite"},
                     {"data", {
@@ -629,7 +584,7 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
 
             auto decoded = jwt::decode(token);
             jwt::verify().allow_algorithm(jwt::algorithm::hs256{secret}).verify(decoded);
-            
+
             std::string user_id = decoded.get_subject();
             json server = create_server(serverName, user_id);
 
@@ -665,21 +620,21 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
                         std::string base64_image = msg.value("buffer", "");
                         std::string user_id = msg.value("userid", "");
                         std::string image_name = std::string("user_") + user_id + std::string("_profile_v") + std::to_string(number) + ".webp";
-        
+
                         if (base64_image.empty())
                             return;
-        
+
                         auto result = boost::beast::detail::base64::decode(
                             buffer.data(),
                             base64_image.data(),
                             base64_image.size()
                         );
-        
+
                         std::string path = handle_images(buffer, result, image_name);
                         std::cout << "[Image] " << path << "\n";
-        
+
                         set_user_profile_picture(user_id, path);
-        
+
                         json ack = {{"event", "upload_profile_ack"}, {"data", {{"status", "success"}}}};
                         ws->text(true);
                         ws->write(net::buffer(ack.dump()));
@@ -727,19 +682,18 @@ void do_session(tcp::socket socket,
 }
 
 json get_user(const std::string& username);
-
 void create_account(const std::string& username, const std::string& displayName, const std::string& password, const std::string& custom_status, const std::string& bio);
 bool login_user(std::string& username, std::string& password);
 json get_messages(const std::string serverID, std::optional<int> index);
 void update_account(const std::string& username, const std::string& displayname, const std::string& profile_picture, const std::string& custom_status, const std::string& bio, const std::string& UUID);
 json user_get_all_servers(const std::string& UUID);
 
-int ping_server() {        
+int ping_server() {
     try {
         const std::string host = "discord.com";
         const std::string port = "443";
         std::string target = cenv.find_token("hooks", "webhook_key");
-            
+
         int version = 11; // HTTP/1.1
 
         std::string body = R"({"content": "Atlas Server is active."})";
@@ -827,7 +781,7 @@ int main(int argc, char* argv[]) {
         http::response<http::string_body> res{http::status::ok, req.version()};
         res.set(http::field::server, "Boost.Beast");
         res.set(http::field::content_type, "application/json");
-        res.set(http::field::access_control_allow_origin, "http://localhost:3000"); 
+        res.set(http::field::access_control_allow_origin, "http://localhost:3000");
         res.set(http::field::access_control_allow_credentials, "true");
 
         try {
@@ -838,10 +792,10 @@ int main(int argc, char* argv[]) {
 
             std::string username = body.value("username", "");
             std::string password = body.value("password", "");
-            
+
             if (login_user(username, password)) {
                 json user = get_user(username);
-                
+
                 // Calculate expiry for 1 week (matches cookie Max-Age)
                 auto expiry_time = std::chrono::system_clock::now() + std::chrono::minutes(60 * 24 * 7);
 
@@ -852,12 +806,12 @@ int main(int argc, char* argv[]) {
                     .set_audience("as-cli")
                     .set_subject(user["user_id"])
                     .set_issued_at(std::chrono::system_clock::now())
-                    .set_expires_at(expiry_time) // 🔥 FIXED: 1 week expiry (matches cookie max-age)
-                    .sign(jwt::algorithm::hs256{secret}); 
+                    .set_expires_at(expiry_time)
+                    .sign(jwt::algorithm::hs256{secret});
 
-                // std::string cookie_value = "token=" + token + 
+                // std::string cookie_value = "token=" + token +
                 //                         "; Path=/; HttpOnly; Max-Age=604800";
-                
+
                 // std::cout << "COOKIE: " << cookie_value;
                 // res.set(http::field::set_cookie, cookie_value);
 
@@ -916,7 +870,7 @@ int main(int argc, char* argv[]) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
         json response_body;
 
-        res.set(http::field::access_control_allow_origin, "http://localhost:3000"); 
+        res.set(http::field::access_control_allow_origin, "http://localhost:3000");
         res.set(http::field::access_control_allow_credentials, "true");
         auto body = json::parse(req.body());
 
@@ -938,7 +892,7 @@ int main(int argc, char* argv[]) {
                 std::cout << "Index is not an integer!\n";
             }
         }
-    
+
         response_body = get_messages(serverID, index);
 
         res.set(http::field::content_type, "application/json");
@@ -959,14 +913,14 @@ int main(int argc, char* argv[]) {
             std::string displayName = body.value("displayName", "");
             std::string bio = body.value("bio", "");
             std::string custom_status = body.value("customStatus", "");
-    
+
             create_account(username, displayName, password, custom_status, bio);
 
             res.result(http::status::ok);
-    
+
             response_body["status"] = "created";
             response_body["username"] = username;
-            
+
         } catch (std::exception &e) {
             response_body["error"] = "Invalid JSON";
             response_body["what"] = e.what();
@@ -988,12 +942,12 @@ int main(int argc, char* argv[]) {
         std::string user_id = parse_bearer_token(req);
 
         // 🔥 Always include CORS headers before returning any response
-        res.set(http::field::access_control_allow_origin, "http://localhost:3000"); 
+        res.set(http::field::access_control_allow_origin, "http://localhost:3000");
         res.set(http::field::access_control_allow_credentials, "true");
 
         try {
 
-            res.result(http::status::ok); 
+            res.result(http::status::ok);
 
             json user = get_user_all(user_id);
 
@@ -1003,7 +957,7 @@ int main(int argc, char* argv[]) {
         } catch (const std::runtime_error& e) {
             // --- AUTH FAILURE PATH (e.g., Authorization cookie missing) ---
             // For missing cookie or general auth error, 403 Forbidden is often appropriate
-            res.result(http::status::forbidden); 
+            res.result(http::status::forbidden);
             response_body["error"] = "Authorization failed.";
             response_body["what"] = e.what();
             std::cout << "Auth Error: " << e.what() << "\n";
@@ -1028,13 +982,13 @@ int main(int argc, char* argv[]) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
         json response_body;
 
-        res.set(http::field::access_control_allow_origin, "http://localhost:3000"); 
+        res.set(http::field::access_control_allow_origin, "http://localhost:3000");
         res.set(http::field::access_control_allow_credentials, "true");
 
         try {
             res.result(http::status::ok);
 
-            if (parse_bearer_token(req).empty()) {     
+            if (parse_bearer_token(req).empty()) {
                 response_body["status"] = 200;
                 response_body["logged_in"] = false;
             }
@@ -1061,13 +1015,13 @@ int main(int argc, char* argv[]) {
         beast::flat_buffer buffer;
         ImageResponse image_res;
         boost::beast::error_code ec;
-        
+
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
         json response_body;
 
         std::string user_id = parse_bearer_token(req);
 
-        res.set(http::field::access_control_allow_origin, "http://localhost:3000"); 
+        res.set(http::field::access_control_allow_origin, "http://localhost:3000");
         res.set(http::field::access_control_allow_credentials, "true");
 
         try {
@@ -1111,6 +1065,28 @@ int main(int argc, char* argv[]) {
         res.set(http::field::access_control_allow_credentials, "true");
 
         response_body = user_get_all_servers(user_id);
+
+        res.set(http::field::content_type, "application/json");
+        res.body() = response_body.dump();
+        res.prepare_payload();
+
+        return res;
+    };
+
+    routes["/api/users/lookat"] = [](const http::request<http::string_body>& req) {
+        http::response<http::string_body> res{http::status::unauthorized, req.version()};
+        auto body = json::parse(req.body());
+        json response_body;
+
+        try {
+            res.result(http::status::ok);
+            std::string username = body.value("username", "");
+
+            auto user = lookat_user(username);
+            response_body = user;
+        } catch (std::exception& e) {
+            std::cout << e.what() << std::endl;
+        }
 
         res.set(http::field::content_type, "application/json");
         res.body() = response_body.dump();
@@ -1163,6 +1139,32 @@ int main(int argc, char* argv[]) {
 
         } catch (std::exception &e) {
             std::cout << e.what() << "\n";
+        }
+
+        res.set(http::field::content_type, "application/json");
+        res.body() = response_body.dump();
+        res.prepare_payload();
+
+        return res;
+    };
+
+    routes["/api/user_access_status"] = [](const http::request<http::string_body>& req) {
+        http::response<http::string_body> res{http::status::unauthorized, req.version()};
+        auto body = json::parse(req.body());
+        json response_body;
+
+        try {
+            res.result(http::status::ok);
+            std::string token = body.value("token", "");
+            std::string serverID = body.value("sid", "");
+            std::string userID = decode_token(token);
+
+            auto result = check_user_in_server(userID, serverID);
+            response_body = result;
+
+        } catch(std::exception& e) {
+            std::cout << e.what() << std::endl;
+            response_body["error"] = e.what();
         }
 
         res.set(http::field::content_type, "application/json");

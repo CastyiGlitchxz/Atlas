@@ -1,26 +1,26 @@
 interface Globals {
     url_string: {
-        scheme: ("http" | "https")
+        scheme: string
         port: (number | undefined)
         top_level_domain: string
         second_level_domain: string
         subdomain: string
     },
     websockets: {
-        scheme: ("ws" | "wss")
+        scheme: string
     }
 }
 
 export const globals: Readonly<Globals> = {
     url_string: {
-        scheme: "http",
-        subdomain: "localhost",
+        scheme: process.env.NEXT_PUBLIC_SCHEME,
+        subdomain: process.env.NEXT_PUBLIC_SUBDOMAIN,
         top_level_domain: "",
         second_level_domain: "",
-        port: 8080
+        port: parseInt(process.env.NEXT_PUBLIC_PORT)
     },
     websockets: {
-        scheme: "ws"
+        scheme: process.env.NEXT_PUBLIC_WEBSOCKET_SCHEME
     }
 };
 

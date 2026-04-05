@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
 images: {
     remotePatterns: [
       {
-        protocol: globals.url_string.scheme,
+        protocol: globals.url_string.scheme === 'http' ? 'http' : 'https',
         hostname: globals.url_string.subdomain,
         pathname: "/assets/**"
       },
