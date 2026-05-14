@@ -4,22 +4,24 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/core/detail/base64.hpp>
+#include <cstddef>
 #include <exception>
 #include <iostream>
+#include <optional>
 #include <random>
 #include <string>
-#include <map>
 #include <thread>
 #include <chrono>
 #include <nlohmann/json.hpp>
 #include "headers/database.hpp"
 #include "headers/messaging.hpp"
 #include <jwt-cpp/jwt.h>
-#include <vector>
 #include "headers/cenv.hpp"
-#include "headers/filesystem.hpp"
+#include "headers/file_handler.hpp"
 #include "headers/abstract.hpp"
 #include <yaml-cpp/yaml.h>
+#include "headers/key_manager.hpp"
+#include "headers/relationships.hpp"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -80,10 +82,11 @@ void handle_http(tcp::socket& socket,
                  const http::request<http::string_body>& req,
                  const std::map<std::string, HttpRoute>& routes)
 {
-    // 1. Get the requested path
-    std::string path{req.target().data(), req.target().size()};
+    std::string full_target{req.target().data(), req.target().size()};
+    size_t query_pos = full_target.find('?');
+    
+    std::string path = full_target.substr(0, query_pos);
 
-    // CATCH THE OPTIONS (PREFLIGHT) REQUEST FIRST
     if (req.method() == http::verb::options) {
         http::response<http::empty_body> res{http::status::ok, req.version()};
         res.set(http::field::server, "Boost.Beast");
@@ -99,15 +102,12 @@ void handle_http(tcp::socket& socket,
         return;
     }
 
-    // 2. Handle Actual Request (GET, POST, etc.)
     auto it = routes.find(path);
     http::response<http::string_body> res;
 
     if (it != routes.end()) {
-        // Route handler returns the final response object (with cookies/body)
         res = it->second(req);
     } else {
-        // Handle 404 Not Found
         json response_body;
         response_body["error"] = "Endpoint not found";
 
@@ -118,10 +118,9 @@ void handle_http(tcp::socket& socket,
         res.prepare_payload();
     }
 
-    res.set(http::field::access_control_allow_origin, "*");
+    res.set(http::field::access_control_allow_origin, "http://localhost:3000"); // Standard practice: be specific
     res.set(http::field::access_control_allow_credentials, "true");
 
-    // Write the resulting response
     http::write(socket, res);
 }
 
@@ -146,6 +145,12 @@ std::string generate_server_code(std::string& user_id, std::string& sid);
 json get_all_invite_codes(std::string& serverID);
 json lookat_user(std::string& username);
 json check_user_in_server(std::string& UUID, std::string& serverID);
+json get_user(const std::string& username);
+void create_account(const std::string& username, const std::string& displayName, const std::string& password, const std::string& custom_status, const std::string& bio);
+bool login_user(std::string& username, std::string& password);
+json get_messages(const std::string serverID, std::optional<int> index);
+void update_account(const std::string& username, const std::string& displayname, const std::string& profile_picture, const std::string& custom_status, const std::string& bio, const std::string& UUID);
+json user_get_all_servers(const std::string& UUID);
 
 std::string get_user_id_from_cookie(const http::request<http::string_body>& req) {
     if (!req.count(http::field::cookie)) {
@@ -475,7 +480,7 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
                 {"event", "return_user"},
                 {"data", {
                     {"author", {
-                        {"userid", user_id},
+                        {"userID", user_id},
                         {"displayName", user.value("displayName", "")}
                     }}
                 }},
@@ -520,10 +525,12 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
                     }}
                 };
             } else {
-                std::string user_id = response.value("issued_by", "");
+                std::string userID = response.value("issued_by", "");
                 std::string sid = response.value("sid", "");
-                std::string username = get_user_all(user_id).value("username", "");
-                std::string server_name = get_server(sid)["server"].value("server_name", "");
+                std::string username = get_user_all(userID).value("username", "");
+                json server = get_server(sid)["server"];
+                std::string serverName = server.value("server_name", "");
+                std::optional<std::string> icon = server["icon"];
 
                 return json{
                     {"event", "invite"},
@@ -531,7 +538,8 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
                         {"issued_by", username},
                         {"server", {
                             {"sid", sid},
-                            {"server_name", server_name},
+                            {"server_name", serverName},
+                            {"icon", icon},
                         }}
                     }}
                 };
@@ -556,11 +564,11 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
         eventHandlers["join_server"] = [&](const json& data) {
             http::response<http::string_body> res{http::status::unauthorized, req.version()};
             std::string token = data.value("token", "");
-
-            std::string user_id = decode_token(token);
             std::string sid = data.value("sid", "");
 
-            json sres = join_server(sid, user_id);
+            std::string userID = decode_token(token);
+
+            json sres = join_server(sid, userID);
 
             if (sres.contains("error")) {
                 return json {
@@ -579,20 +587,35 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
         };
 
         eventHandlers["create_server"] = [&](const json& data) {
-            std::string token = data.value("auth", "");
+            std::string token = data.value("token", "");
             std::string serverName = data.value("server_name", "");
 
-            auto decoded = jwt::decode(token);
-            jwt::verify().allow_algorithm(jwt::algorithm::hs256{secret}).verify(decoded);
-
-            std::string user_id = decoded.get_subject();
-            json server = create_server(serverName, user_id);
+            std::string userID = decode_token(token);
+            json server = create_server(serverName, userID);
 
             return json{
                 {"event", "creation_response"},
                 {"data", server}
             };
 
+        };
+
+        eventHandlers["accept_friend_request"] = [&](const json& data) {
+            try {
+                int requestID = data.at("requestID");
+                change_relationship_status(requestID, RelationshipTypes::accepted);
+
+                return json{
+                    {"event", "request_accepted"},  
+                };
+            } catch (std::exception& e) {
+                std::cout << e.what() << std::endl;
+
+                return json{
+                    {"event", "failed_request_acceptance"},
+                    {"data", "Failed to accept request"}
+                };
+            }
         };
 
         for (;;) {
@@ -666,27 +689,39 @@ void handle_websocket(tcp::socket socket, const http::request<http::string_body>
 void do_session(tcp::socket socket,
                 const std::map<std::string, HttpRoute>& routes)
 {
-    try {
-        beast::flat_buffer buffer;
-        http::request<http::string_body> req;
-        http::read(socket, buffer, req);
+    beast::error_code ec;
+    beast::flat_buffer buffer;
+    http::request<http::string_body> req;
 
+    http::read(socket, buffer, req, ec);
+
+    if (ec) {
+        if (ec == http::error::end_of_stream) return;
+        std::cerr << "[Session] Read Error: " << ec.message() << "\n";
+        return;
+    }
+
+    try {
         if (websocket::is_upgrade(req)) {
             handle_websocket(std::move(socket), req);
+            return;
         } else {
             handle_http(socket, req, routes);
         }
     } catch (const std::exception& e) {
-        std::cerr << "[Session] Error: " << e.what() << "\n";
+        std::cerr << "[Session] Logic Error: " << e.what() << "\n";
+    }
+
+    if (socket.is_open()) {
+        socket.shutdown(tcp::socket::shutdown_both, ec);
+ 
+        if (ec && ec != boost::asio::error::not_connected) {
+            std::cerr << "[Session] Shutdown Error: " << ec.message() << "\n";
+        }
+
+        socket.close(ec); 
     }
 }
-
-json get_user(const std::string& username);
-void create_account(const std::string& username, const std::string& displayName, const std::string& password, const std::string& custom_status, const std::string& bio);
-bool login_user(std::string& username, std::string& password);
-json get_messages(const std::string serverID, std::optional<int> index);
-void update_account(const std::string& username, const std::string& displayname, const std::string& profile_picture, const std::string& custom_status, const std::string& bio, const std::string& UUID);
-json user_get_all_servers(const std::string& UUID);
 
 int ping_server() {
     try {
@@ -747,23 +782,45 @@ int main(int argc, char* argv[]) {
         ping_server();
     }
 
+    // json res = send_friend_request("ada8d4a2-4d71-4cc3-b647-f075baea6aa2", "e0169a18-b504-47f5-b38d-759014f24caa");
+    // std::cout << "[Friend Res] " << res.dump() << std::endl;
+
     std::map<std::string, HttpRoute> routes;
 
     YAML::Node config = YAML::LoadFile("../config/app-config.yml");
 
-    if (!config["application"])
-        throw std::runtime_error("Could not find 'application' in 'app-config' file");
+    if (!config["application"] || !config["chat"])
+        throw std::runtime_error("Could not find 'application' or 'chat' in 'app-config' file");
 
-    routes["/"] = [config](const http::request<http::string_body>& req) {
+    routes["/api/"] = [config](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::ok, req.version()};
         json response_body;
-        // auto body = json::parse(req.body());
-
+        
         try {
-            res.result(http::status::ok);
-            response_body["api_version"] = config["application"]["version"].as<std::string>();
-            response_body["welcome"] = "Welcome to the Atlas api.";
+            if (req.body().empty()) {
+                res.result(http::status::bad_request);
+                response_body["error"] = "Empty request body";
+            } else {
+                auto body = json::parse(req.body());
+                res.result(http::status::ok);
 
+                json client = body["client"];
+
+                if (body.contains("client") && body["client"].is_object()) {
+                    bool validation = validate_apikey(client.value("apikey", ""));
+                    if (!validation) {
+                        res.result(http::status::unauthorized);
+                        response_body["invalid_apikey_error"] = "Invalid Api Key";
+                    } else {
+                        response_body["api_version"] = config["application"]["version"].as<std::string>();
+                        response_body["welcome"] = "Welcome to the Atlas api.";
+                        response_body["client"] = client;
+                    }
+                } else {
+                    res.result(http::status::bad_request);
+                    response_body["value_error"] = "No client provided";
+                }
+            }
         } catch (const std::exception &e) {
             std::cout << "Error: " << e.what() << "\n";
             response_body["error"] = "Internal server error.";
@@ -850,11 +907,9 @@ int main(int argc, char* argv[]) {
 
         try {
             res.result(http::status::ok);
-            response_body["status"] = 200;
             response_body["message"] = "Logout successful.";
         } catch (std::exception& e) {
             res.result(http::status::internal_server_error);
-            response_body["status"] = 500;
             response_body["message"] = e.what();
             std::cout << e.what();
         }
@@ -866,34 +921,55 @@ int main(int argc, char* argv[]) {
         return res;
     };
 
-    routes["/api/messages_get"] = [](const http::request<http::string_body>& req) {
+    routes["/api/messages"] = [](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
         json response_body;
+        
+        try {
+            std::string serverID = req["Server-ID"];
+            std::string userID = parse_bearer_token(req);
 
-        res.set(http::field::access_control_allow_origin, "http://localhost:3000");
-        res.set(http::field::access_control_allow_credentials, "true");
-        auto body = json::parse(req.body());
+            std::cout << "[METHOD] " << req.method_string() << std::endl;
+            std::cout << "[HEADER] " << req["Authorization"] << std::endl;
+            std::cout << "[USERID] " << userID << std::endl;
+    
+            json result = check_user_in_server(userID, serverID);
+            bool validation = validate_apikey(req["Apikey"]);
 
-        std::string serverID = body["sid"];
-        std::optional<int> index;
-
-        res.result(http::status::ok);
-
-        if (body.empty()) {
-            response_body["error"] = {
-                {"msg", "server error"}
-            };
-        }
-
-        if (body.contains("index") && !body["index"].is_null()) {
-            if (body["index"].is_number_integer()) {
-                index = body["index"].get<int>();
+            if (!validation) {
+                res.result(http::status::unauthorized);
+                response_body["invalid_apikey_error"] = "Invalid Api Key";
             } else {
-                std::cout << "Index is not an integer!\n";
-            }
-        }
+                if (!result) {
+                    res.result(http::status::forbidden);
+                    response_body["bad_access_error"] = "User not in server";
+                } else {        
+                    res.result(http::status::ok);
+                    std::optional<int> index;
+                    std::string_view ret_idx = req["Page-Index"];
+                    std::cout << "[Ret]: " << ret_idx << std::endl;
 
-        response_body = get_messages(serverID, index);
+                    if (!ret_idx.empty()) {
+                        try {
+                            index = std::stoi(std::string(ret_idx));
+                        } catch (const std::exception& e) {
+                            std::cout << "Index is not a valid integer: " << e.what() << std::endl;
+                        }
+                    }
+
+                    if (index.has_value()) {
+                        std::cout << "[Value] " << index.value() << std::endl;
+                        response_body = get_messages(serverID, index);
+                    } else {
+                        std::cout << "Index is missing or null!\n";
+                        response_body = get_messages(serverID, std::nullopt); 
+                    }
+                }
+            }
+        } catch (std::exception& e) {
+            std::cout << e.what() << std::endl;
+            response_body["error"] = e.what();
+        }
 
         res.set(http::field::content_type, "application/json");
         res.body() = response_body.dump();
@@ -934,26 +1010,50 @@ int main(int argc, char* argv[]) {
         return res;
     };
 
-    routes["/api/account/get"] = [](const http::request<http::string_body>& req) {
-        // 1. Declare the response object with a default state (e.g., 401)
+    using ImageResponse = http::response<http::vector_body<char>>;
+
+    routes["/api/account"] = [](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
-        json response_body;
-
-        std::string user_id = parse_bearer_token(req);
-
-        // 🔥 Always include CORS headers before returning any response
         res.set(http::field::access_control_allow_origin, "http://localhost:3000");
         res.set(http::field::access_control_allow_credentials, "true");
 
+        beast::flat_buffer buffer;
+        ImageResponse image_res;
+        boost::beast::error_code ec;
+        json response_body;
+        
         try {
-
+            std::string userID = parse_bearer_token(req);
+            std::string apikey = req["Apikey"];
             res.result(http::status::ok);
 
-            json user = get_user_all(user_id);
+            bool validation = validate_apikey(apikey);
 
-            response_body["status"] = 200;
-            response_body["user"] = user;
+            if (!validation) {
+                res.result(http::status::unauthorized);
+                response_body["invalid_apikey_error"] = "Invalid Api Key";
+            } else {
+                if (req.method() == http::verb::post) {
+                    if (req.body().empty()) {
+                        res.result(http::status::bad_request);
+                        response_body["error"] = "Empty request body";
+                    } else {
+                        auto body = json::parse(req.body());
 
+                        auto user = body["user"];
+
+                        std::string displayname = user.value("displayName", "");
+                        std::string username = user.value("username", "");
+                        std::string profile_picture = user.value("picture", "");
+                        std::string custom_status = user.value("customStatus", "");
+                        std::string bio = user.value("bio", "");
+
+                        update_account(username, displayname, profile_picture, custom_status, bio, userID);
+                    }
+                } else if (req.method() == http::verb::get) {
+                    response_body["user"] = get_user_all(userID);
+                }
+            }
         } catch (const std::runtime_error& e) {
             // --- AUTH FAILURE PATH (e.g., Authorization cookie missing) ---
             // For missing cookie or general auth error, 403 Forbidden is often appropriate
@@ -980,91 +1080,34 @@ int main(int argc, char* argv[]) {
 
     routes["/api/login_status"] = [](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
-        json response_body;
-
         res.set(http::field::access_control_allow_origin, "http://localhost:3000");
         res.set(http::field::access_control_allow_credentials, "true");
 
-        try {
-            res.result(http::status::ok);
-
-            if (parse_bearer_token(req).empty()) {
-                response_body["status"] = 200;
-                response_body["logged_in"] = false;
-            }
-
-            res.result(http::status::ok);
-
-            response_body["status"] = 200;
-            response_body["logged_in"] = true;
-        } catch (...) {
-            response_body["status"] = 404;
-            response_body["logged_in"] = false;
-        }
-
-        res.set(http::field::content_type, "application/json");
-        res.body() = response_body.dump();
-        res.prepare_payload();
-
-        return res;
-    };
-
-    using ImageResponse = http::response<http::vector_body<char>>;
-
-    routes["/api/account/update"] = [](const http::request<http::string_body>& req) {
-        beast::flat_buffer buffer;
-        ImageResponse image_res;
-        boost::beast::error_code ec;
-
-        http::response<http::string_body> res{http::status::unauthorized, req.version()};
         json response_body;
 
-        std::string user_id = parse_bearer_token(req);
-
-        res.set(http::field::access_control_allow_origin, "http://localhost:3000");
-        res.set(http::field::access_control_allow_credentials, "true");
-
         try {
-            if (req.body().empty()) {
-                throw std::runtime_error("Empty body");
+            res.result(http::status::ok);
+            std::string apikey = req["Apikey"];
+
+            bool validation = validate_apikey(apikey);
+
+            if (!validation) {
+                res.result(http::status::unauthorized);
+                response_body["invalid_apikey_error"] = "Invalid Api Key";
+            } else {
+                std::string userID = parse_bearer_token(req);
+
+                if (userID.empty()) {
+                    res.result(http::status::forbidden);
+                    response_body["logged_in"] = false;
+                } else {
+                    response_body["logged_in"] = true;
+                }
             }
-            auto body = json::parse(req.body());
-
-            auto user = body["user"];
-
-            std::string displayname = user.value("displayName", "");
-            std::string username = user.value("username", "");
-            std::string profile_picture = user.value("picture", "");
-            std::string custom_status = user.value("customStatus", "");
-            std::string bio = user.value("bio", "");
-
-            update_account(username, displayname, profile_picture, custom_status, bio, user_id);
-
-            response_body["status"] = 200;
-        } catch (std::exception &e) {
-            response_body["error"] = "Invalid JSON";
-            response_body["what"] = e.what();
-            std::cout << e.what() << "\n";
+        } catch (std::exception& e) {
+            res.result(http::status::internal_server_error);
+            response_body["error"] = "Internal server error";
         }
-
-        res.set(http::field::content_type, "application/json");
-        res.body() = response_body.dump();
-        res.prepare_payload();
-
-        return res;
-    };
-
-    routes["/api/servers/get"] = [](const http::request<http::string_body>& req) {
-        http::response<http::string_body> res{http::status::unauthorized, req.version()};
-        json response_body;
-        std::string user_id = parse_bearer_token(req);
-
-        res.result(http::status::ok);
-
-        res.set(http::field::access_control_allow_origin, "http:://localhost:3000");
-        res.set(http::field::access_control_allow_credentials, "true");
-
-        response_body = user_get_all_servers(user_id);
 
         res.set(http::field::content_type, "application/json");
         res.body() = response_body.dump();
@@ -1095,22 +1138,52 @@ int main(int argc, char* argv[]) {
         return res;
     };
 
-    routes["/api/servers/server_info"] = [](const http::request<http::string_body>& req) {
+    routes["/api/servers"] = [](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
-        auto body = json::parse(req.body());
+        res.result(http::status::ok);
+        res.set(http::field::access_control_allow_origin, "http://localhost:3000");
+
+        res.set(http::field::access_control_allow_credentials, "true");
         json response_body;
+        
+        try {    
+            std::string serverID = "";
+            std::string userID = parse_bearer_token(req);
+            std::string apikey = req["Apikey"];
+            
+            bool validation = validate_apikey(apikey);
+            
+            if (!validation) {
+                res.result(http::status::unauthorized);
+                response_body["invalid_apikey_error"] = "Invalid Api Key";
+            } else {
+                std::string target(req.target());
+                size_t pos = target.find("sid=");
+                if (pos != std::string::npos) {
+                    serverID = target.substr(pos + 4); 
+                    size_t ampersand = serverID.find('&');
+                    if (ampersand != std::string::npos) {
+                        serverID = serverID.substr(0, ampersand);
+                    }
+                }
 
-        try {
-            res.result(http::status::ok);
-            res.set(http::field::access_control_allow_origin, "http:://localhost:3000");
-            res.set(http::field::access_control_allow_credentials, "true");
+                if (!serverID.empty()) {
+                    bool result = check_user_in_server(userID, serverID);
 
-            std::string sid = body.value("sid", "");
-            auto server = get_server(sid);
-
-            response_body = server;
+                    if (!result) {
+                        res.result(http::status::forbidden);
+                        response_body["bad_access_error"] = "User not in server";
+                    } else {
+                        response_body = get_server(serverID);
+                    }
+                } else {
+                    response_body = user_get_all_servers(userID);
+                }
+            }
         } catch (std::exception& e) {
-            std::cout << e.what() << std::endl;
+            res.result(http::status::internal_server_error);
+            response_body["error"] = "Internal Server Error";
+            response_body["details"] = e.what();
         }
 
         res.set(http::field::content_type, "application/json");
@@ -1120,24 +1193,33 @@ int main(int argc, char* argv[]) {
         return res;
     };
 
-    routes["/api/servers/userlist_get"] = [](const http::request<http::string_body>& req) {
+    routes["/api/servers/userlist"] = [](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
-        auto body = json::parse(req.body());
         json response_body;
 
         try {
-            if (req.body().empty()) {
-                throw std::runtime_error("Empty body");
-            }
-            std::string server_id = body.value("serverID", "");
-
             res.result(http::status::ok);
+            std::string userID = parse_bearer_token(req);
+            std::string serverID = req["Server-ID"];
+            std::string apikey = req["Apikey"];
 
-            json user = server_get_all_users(server_id);
+            bool validation = validate_apikey(apikey);
 
-            response_body["users"] = user;
-
+            if (!validation) {
+                res.result(http::status::unauthorized);
+                response_body["invalid_apikey_error"] = "Invalid Api Key";
+            } else {
+                bool result = check_user_in_server(userID, serverID);
+                
+                if (!result) {
+                    res.result(http::status::forbidden);
+                    response_body["bad_access_error"] = "User not in server";
+                } else {
+                    response_body["users"] = server_get_all_users(serverID);
+                }
+            }
         } catch (std::exception &e) {
+            res.result(http::status::internal_server_error);
             std::cout << e.what() << "\n";
         }
 
@@ -1148,20 +1230,79 @@ int main(int argc, char* argv[]) {
         return res;
     };
 
-    routes["/api/user_access_status"] = [](const http::request<http::string_body>& req) {
+    routes["/api/friends"] = [](const http::request<http::string_body>& req) {
+        http::response<http::string_body> res{http::status::unauthorized, req.version()};
+        json response_body = json::object();
+
+        try {
+            res.result(http::status::ok);
+            std::string userID = parse_bearer_token(req);
+            std::string serverID = req["Server-ID"];
+            std::string apikey = req["Apikey"];
+
+            bool validation = validate_apikey(apikey);
+
+            if (!validation) {
+                res.result(http::status::unauthorized);
+                response_body["error"] = "Invalid Api Key";
+            } else {
+                json friends = get_all_friends(userID);
+                response_body = friends;
+            }
+        } catch (std::exception& e) {
+            res.result(http::status::internal_server_error);
+            response_body["error"] = e.what();
+        }
+
+        res.set(http::field::content_type, "application/json");
+        res.body() = response_body.dump();
+        return res;
+    };
+
+    routes["/api/friends/requests"] = [](const http::request<http::string_body>& req) {
+        http::response<http::string_body> res{http::status::unauthorized, req.version()};
+        json response_body = json::object();
+
+        try {
+            res.result(http::status::ok);
+            std::string userID = parse_bearer_token(req);
+            std::string serverID = req["Server-ID"];
+            std::string apikey = req["Apikey"];
+
+            bool validation = validate_apikey(apikey);
+
+            if (!validation) {
+                res.result(http::status::unauthorized);
+                response_body["error"] = "Invalid Api Key";
+            } else {
+                json requests = get_friend_requests(userID);
+                response_body = requests;
+            }
+        } catch (std::exception& e) {
+            res.result(http::status::internal_server_error);
+            response_body["error"] = e.what();
+        }
+
+        res.set(http::field::content_type, "application/json");
+        res.body() = response_body.dump();
+        return res;
+    };
+
+    routes["/api/createkeys"] = [](const http::request<http::string_body>& req) {
         http::response<http::string_body> res{http::status::unauthorized, req.version()};
         auto body = json::parse(req.body());
         json response_body;
 
         try {
             res.result(http::status::ok);
-            std::string token = body.value("token", "");
-            std::string serverID = body.value("sid", "");
-            std::string userID = decode_token(token);
-
-            auto result = check_user_in_server(userID, serverID);
-            response_body = result;
-
+            std::string assignee = body.value("assignee", "");
+            auto client = std::get<KeyMate>(create_apikey(assignee));
+            response_body["return"] = {
+                {"id", client.id},
+                {"key", client.key},
+                {"assigner", client.assigner},
+                {"assignee", client.assignee},
+            };
         } catch(std::exception& e) {
             std::cout << e.what() << std::endl;
             response_body["error"] = e.what();
@@ -1176,7 +1317,8 @@ int main(int argc, char* argv[]) {
 
     try {
         net::io_context ioc;
-        tcp::acceptor acceptor{ioc, {tcp::v4(), 8080}};
+        boost::asio::ip::port_type port_number = config["application"]["port"].as<boost::asio::ip::port_type>();
+        tcp::acceptor acceptor{ioc, {tcp::v4(), port_number}};
         std::cout << "Server running on:\n  • HTTP → http://localhost:8080/\n  • WS   → ws://localhost:8080/\n";
 
         for (;;) {

@@ -3,7 +3,7 @@
 
 struct User {
     std::string username;
-    std::string userid;
+    std::string userID;
     std::string displayName;
     std::string status;
     std::string picture;

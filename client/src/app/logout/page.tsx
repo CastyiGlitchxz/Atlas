@@ -1,10 +1,11 @@
 'use client'
 
+import React, { useEffect, useState } from "react"
 import { construct_path } from "../../typescript/env";
-import { useEffect, useState } from "react"
 import { get_token } from "../../typescript/user";
 import { useRouter } from "next/navigation";
 import { eventManager } from "../../typescript/eventsManager";
+import { Client } from "../../typescript/interfaces";
 
 export default function LogoutPage() {
     const router = useRouter();
@@ -17,19 +18,15 @@ export default function LogoutPage() {
             const token = get_token();
 
             const res = await fetch(construct_path("api/logout"), {
-                method: "POST",
+                method: "GET",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    "Authorization": `Bearer ${token}`,
+                    "Apikey": Client.apikey
                 },
             });
             
-            const data: {
-                status: number,
-                message: string
-            } = await res.json();
-            
-            if (data.status === 200) {
+            if (res.status === 200) {
                 setTimerState(true);
                 localStorage.removeItem("token");
             }

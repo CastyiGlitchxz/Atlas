@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { construct_path, globals } from "../../typescript/env";
 import { get_token } from "../../typescript/user";
 import styles from "../../stylesheets/css/settings.module.css";
-import { Account, appearanceStatus, Profile } from "../../typescript/interfaces";
+import { Account, appearanceStatus, Client, Profile } from "../../typescript/interfaces";
 import { useRouter } from "next/navigation";
 import { Tab, Tabs } from "../components";
 import { getWebSocket } from "../../typescript/websocket";
@@ -28,11 +28,12 @@ export default function SettingsPage() {
     useEffect(() => {        
         (async () => {
             try {
-                const res = await fetch(construct_path("api/account/get"), {
-                    method: "POST",
+                const res = await fetch(construct_path("api/account"), {
+                    method: "GET",
                     headers: {
                         "Content-Type": "application/json",
-                        "Authorization": `Bearer ${token}`
+                        "Authorization": `Bearer ${token}`,
+                        "Apikey": Client.apikey,
                     },
                 });
                 const data = await res.json();
@@ -46,11 +47,12 @@ export default function SettingsPage() {
     }, []);
     
     async function update_account() {
-        const res = await fetch(construct_path("api/account/update"), {
+        const res = await fetch(construct_path("api/account"), {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
+                "Authorization": `Bearer ${token}`,
+                "Apikey": Client.apikey
             },
             body: JSON.stringify({ "user": user }),
         });
@@ -72,8 +74,6 @@ export default function SettingsPage() {
             });
         };
     };
-
-
     
     useEffect(() => {
         const connectWS = () => {
@@ -107,7 +107,7 @@ export default function SettingsPage() {
             const base64 = btoa(binary);
             const meta = JSON.stringify({
                 event: "upload_profile",
-                userid: user.userid,
+                userid: user.userID,
                 buffer: base64
             });
 

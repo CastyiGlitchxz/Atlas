@@ -1,9 +1,9 @@
-import { Profile } from "../typescript/interfaces";
+import { appearanceStatus, Friend, Profile } from "../typescript/interfaces";
 import styles from "../stylesheets/css/components.module.css";
 import React, { CSSProperties, Dispatch, ReactNode, SetStateAction, useState } from "react";
 import { globals } from "../typescript/env";
 
-export function UserPanel({ user, setTargetUser }: { user: Profile, setTargetUser: Dispatch<SetStateAction<Profile | null>> }) {
+export function UserPanel({ user, setTargetUser }: { user: (Profile | Friend), setTargetUser: Dispatch<SetStateAction<Profile | null | Friend>> }) {
     const statusMap = {
         online: "lime",
         offline: "gray",
@@ -12,7 +12,8 @@ export function UserPanel({ user, setTargetUser }: { user: Profile, setTargetUse
 
     return (
         <div className={styles.userPanel}>
-            <div style={{ background: `url('${user.picture}')`, width: "100%", height: "12rem", display: "grid", gap: 10 }}>
+            <div style={{ background: `url('${user.picture}')`, width: "100%", height: "12rem", display: "grid", gap: 10, borderTopLeftRadius: "inherit",
+    borderTopRightRadius: "inherit" }}>
                 <div className={styles.userPanelHeader}>
                     <button
                         onClick={() => setTargetUser(null)} 
@@ -39,19 +40,20 @@ export function UserPanel({ user, setTargetUser }: { user: Profile, setTargetUse
                     </div>
                 </div>
 
-                <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                     <img src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${user?.picture}`} width={110} height={110} alt="" />
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <span
-                            style={{ fontSize: "30px" }}
-                            className={styles.userQC}
-                        >
+                    <div className={styles["user-content"]}>
+                        <span className={styles["user-username"]}>
                             {user.displayName}
                         </span>
-                        <span className={styles.userQC}>{user.customStatus}</span>
+                        <span className={styles["user-custom-status"]}>{user.customStatus}</span>
                     </div>
                 </div>
             </div>
+
+            {user.status !== "offline" && <span>
+                <p>Rise Client</p>
+            </span>}
 
             <div className={styles.userButtons}>
                 <button>Add Friend</button>

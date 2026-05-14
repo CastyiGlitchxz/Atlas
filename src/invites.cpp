@@ -1,4 +1,4 @@
-#include "headers/database.hpp"
+#include "../headers/database.hpp"
 #include <nlohmann/json.hpp>
 #include <argon2.h>
 #include <iostream>

@@ -1,13 +1,13 @@
-#include <exception>
+#include "../headers/database.hpp"
+#include "../headers/abstract.hpp"
 #include <iostream>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include "headers/database.hpp"
 #include <cstddef>
 #include <nlohmann/json.hpp>
-#include "headers/abstract.hpp"
 #include <argon2.h>
+#include <optional>
 #include <pqxx/internal/statement_parameters.hxx>
 #include <random>
 #include <string>
@@ -219,7 +219,7 @@ json get_user_all(const std::string& UUID) {
 
             return json{
                 {"username", username},
-                {"userid", user_id},
+                {"userID", user_id},
                 {"email", email},
                 {"displayName", displayname},
                 {"picture", pfp},
@@ -247,7 +247,7 @@ json user_get_all_servers(const std::string& UUID) {
 
         pqxx::work txn(conn);
         pqxx::result r = txn.exec_params(
-            "SELECT s.server_id, s.server_name, s.owner "
+            "SELECT s.server_id, s.server_name, s.owner, s.icon "
             "FROM servers s "
             "JOIN user_servers us ON s.server_id = us.sid "
             "WHERE us.uid = $1",
@@ -258,10 +258,13 @@ json user_get_all_servers(const std::string& UUID) {
             std::string serverId = row["server_id"].as<std::string>();
             std::string serverName = row["server_name"].c_str();
             std::string owner = row["owner"].c_str();
+            std::optional<std::string> icon = row["icon"].as<std::optional<std::string>>();
+            
             response["servers"].push_back({
                 {"name", serverName},
                 {"serverID", serverId},
-                {"owner", owner}
+                {"owner", owner},
+                {"icon", icon}
             });
         }
         

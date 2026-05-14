@@ -1,5 +1,5 @@
 import { construct_path } from "./env";
-import { Profile } from "./interfaces";
+import { Client, Profile } from "./interfaces";
 import { Dispatch, SetStateAction } from "react";
 
 export function get_token(): string {
@@ -19,7 +19,8 @@ export async function login_status(): Promise<boolean> {
         method: "GET",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`
+            "Authorization": `Bearer ${token}`,
+            "Apikey": Client.apikey,
         },
     });
 

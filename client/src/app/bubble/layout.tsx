@@ -3,12 +3,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { useRouter } from "next/navigation";
 import { get_token } from "../../typescript/user";
-import { construct_path } from "../../typescript/env";
+import { construct_path, globals } from "../../typescript/env";
 import styles from "../../stylesheets/css/chat.module.css";
 import { getWebSocket } from "../../typescript/websocket";
-import { serverFormat } from "../../typescript/interfaces";
+import { Client, serverFormat } from "../../typescript/interfaces";
 import { eventManager } from "../../typescript/eventsManager";
 import { AtlasInput, Tab, Tabs } from "../components";
+import Image from "next/image";
 
 const geistSans = Geist({
     variable: "--font-geist-sans",
@@ -50,11 +51,11 @@ export default function RootLayout({
     const [selectedTab, setSelectedTab] = useState(0);
     const [serverList, setServerList] = useState<serverFormat[]>([]);
     const [promptVisibility, setPromptVisibility] = useState<string>("hidden");
-    // const [promptTab, setPromptTab] = useState<string>("create");
     const [server, setServer] = useState<serverFormat>({
         name: "",
         owner: "",
-        serverID: ""
+        serverID: "",
+        icon: null
     });
 
     function open_bubble() {
@@ -67,7 +68,7 @@ export default function RootLayout({
 
     function create_server() {
         const token = get_token();
-        em.emitEvent("create_server", { "auth": token, server_name: server.name });
+        em.emitEvent("create_server", { token: token, server_name: server.name });
     };
 
     useEffect(() => {
@@ -103,14 +104,16 @@ export default function RootLayout({
         (async () => {
             const token = get_token();
 
-            const res = await fetch(construct_path("api/servers/get"), {
+            const res = await fetch(construct_path("api/servers"), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
+                    "Authorization": `Bearer ${token}`,
+                    "Apikey": Client.apikey
                 },
             });
             const data = await res.json();
+            console.log(data)
 
             setServerList(data.servers);
         })();
@@ -185,7 +188,13 @@ export default function RootLayout({
                 </div>
                 {serverList.length !== 0 && serverList.map(server => (
                     <div key={server["serverID"]} className={styles.serverIcon}>
-                        <button onClick={() => open_server(server["serverID"])} className={styles.serverIconPNG}>{server["name"][0]}</button>
+                        <button onClick={() => open_server(server["serverID"])} className={styles.serverIconPNG}>
+                            {server["icon"] === null ? 
+                                server["name"][0] 
+                            :
+                                <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${server["icon"]}`} alt="" width={20} height={20} unoptimized className={styles.serverIconPicture} draggable={false}/>
+                            }
+                        </button>
                         <div className={styles.serverName}>
                             <p>{server["name"]}</p>
                         </div>

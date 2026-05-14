@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { get_token } from "../../typescript/user";
 import styles from "../../stylesheets/css/invite.module.css";
 import { globals } from "../../typescript/env";
+import Image from "next/image";
 
 export default function Invite() {
     const searchParams = useSearchParams();
@@ -18,9 +19,10 @@ export default function Invite() {
         issuer: string,
         server: {
             sid: string,
-            server_name: string
+            server_name: string,
+            icon: string | null
         },
-    }>()
+    }>();
     
     useEffect(() => {
         const ws = getWebSocket();
@@ -38,9 +40,11 @@ export default function Invite() {
                             issuer: data.issued_by,
                             server: {
                                 sid: data.server.sid,
-                                server_name: data.server.server_name
+                                server_name: data.server.server_name,
+                                icon: data.server.icon
                             }
                         });
+                        console.log(data)
                     } else {
                         router.replace(`/invite/invalid_code`);
                     }
@@ -74,7 +78,11 @@ export default function Invite() {
             </div>
             <div className={styles.invite_prompt}>
                 <div className={styles.serverIcon}>
-                    <p>{server?.server.server_name[0]}</p>
+                    {server && server.server.icon !== null ?
+                        <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}/${server.server.icon}`} alt="" width={20} height={20} unoptimized className={styles.serverIconPicture} draggable={false}/>
+                        :
+                        <p>{server?.server.server_name[0]}</p>
+                    }
                 </div>
                 <p><b>{server?.issuer}</b> invited you to <b>{server?.server.server_name}</b></p>
                 <button onClick={() => join_server()} className={styles.joinButton}>Join Server</button>

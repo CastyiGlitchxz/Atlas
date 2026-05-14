@@ -5,7 +5,7 @@ import { eventManager } from "../../../../typescript/eventsManager";
 import { construct_path, globals } from "../../../../typescript/env";
 import styles from "../../../../stylesheets/css/chat.module.css";
 import { get_token } from "../../../../typescript/user";
-import { Profile, serverInfo } from "../../../..//typescript/interfaces";
+import { Client, Profile, serverInfo } from "../../../..//typescript/interfaces";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { messageFormat } from "../../../../typescript/interfaces";
@@ -39,38 +39,49 @@ const MessageItem = memo(({
     onReply: () => void,
     onDelete: () => void
 }) => {
-    const canvasRef = useRef<HTMLCanvasElement[]>([]);
-    useEffect(() => {
-        if (!canvasRef.current) return;
+    // const drawCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
+    //     if (!canvas) return;
 
-        canvasRef.current.forEach((canvas) => {
-            if (!canvas) return;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) return;
+    //     const ctx = canvas.getContext("2d");
+    //     if (!ctx) return;
 
-            // Reset transforms and clear previous drawing
-            ctx.setTransform(1, 0, 0, 1, 0, 0);
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+    //     // Use requestAnimationFrame to ensure the DOM has settled 
+    //     // and the canvas has its actual dimensions
+    //     requestAnimationFrame(() => {
+    //         // Reset and Clear
+    //         ctx.setTransform(1, 0, 0, 1, 0, 0);
+    //         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Set origin to bottom-left
-            ctx.translate(0, canvas.height);
-            ctx.scale(1, -1);
-
-            // Draw curved line
-            ctx.beginPath();
-            ctx.moveTo(20, 0);
-            ctx.quadraticCurveTo(20, 14, 70, 10);
-            ctx.strokeStyle = "gray";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        });
-    }, []);
+    //         // Drawing Logic
+    //         ctx.translate(0, canvas.height);
+    //         ctx.scale(1, -1);
+    //         ctx.beginPath();
+    //         ctx.moveTo(10, 0); // Adjusted from 20 to fit better
+    //         ctx.quadraticCurveTo(10, 15, 40, 15); // Adjusted coordinates to stay in bounds
+    //         ctx.strokeStyle = "gray";
+    //         ctx.lineWidth = 2;
+    //         ctx.stroke();
+    //     });
+    // }, []);
     
     return (
         <div className={styles.message}>
             {refMsgData && (
                 <div className={styles.messageReference}>
-                    <canvas ref={(el) => {if (el) canvasRef.current[refMsgData.id] = el}} width={40} height={20}></canvas>
+                    {/* <canvas 
+                        ref={drawCanvas} 
+                        width={40} 
+                        height={20}
+                    /> */}
+                    <div style={{
+                        width: '20px',
+                        height: '15px',
+                        borderLeft: '2px solid gray',
+                        borderTop: '2px solid gray',
+                        borderTopLeftRadius: '10px',
+                        marginRight: '8px',
+                        marginTop: '10px' // Align it to the middle of the reply
+                    }} />
                     <Image src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${refMsgData.picture}`} alt="" width={20} height={20} unoptimized />
                     <p>{refMsgData.displayName} | {refMsgData.content}</p>
                 </div>
@@ -84,7 +95,25 @@ const MessageItem = memo(({
                             <p><strong>{content.displayName}</strong></p>
                             <p>{content.timestamp}</p>
                         </div>
-                        <p style={{whiteSpace: "pre-line"}}>{content.content}</p>
+                        {content.link === null ? 
+                            <p style={{whiteSpace: "pre-line"}}>{content["content"]}</p>
+                            :
+                            <a href={content.link} data-unsafe data-external onClick={(e) => {
+                                e.preventDefault();
+
+                                if (e.currentTarget.dataset.unsafe) {
+                                    const input = prompt("Unsafe link, user interaction required\nType yes to continue");
+
+                                    if (input === "yes") {
+                                        window.open(content.link);
+                                    } else {
+                                        return;
+                                    }
+                                }
+
+                                window.open(content.link);
+                            }} style={{ color: "white", textDecorationLine: 'underline' }}>{content.content}</a>
+                        }
                     </div>
                 </div>
 
@@ -120,21 +149,16 @@ MessageItem.displayName = "MessageItem";
 export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
     const { id } = use(params);
+    const sid: string = id;
+
     const emRef = useRef<eventManager | null>(null);
     const tokenRef = useRef<string | null>(null);
 
-    if (!emRef.current) {
-        emRef.current = new eventManager();
-    }
-
-    if (!tokenRef.current) {
-        tokenRef.current = get_token();
-    }
+    if (!emRef.current) emRef.current = new eventManager();
+    if (!tokenRef.current) tokenRef.current = get_token();
 
     const em = emRef.current;
     const token = tokenRef.current;
-
-    const sid: string = id;
 
     const chatRef = useRef<HTMLDivElement>(null);
     const messageBoxRef = useRef<HTMLTextAreaElement>(null);
@@ -145,19 +169,21 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
         offline: []
     });
     const [server, setServer] = useState<serverInfo | null>(null);
-    const [messageMode, setMessageMode] = useState<string>("message");
-    const [indicatorMessage, setIndicatorMessage] = useState<string>("");
-    const [mid, setMid] = useState<number>(0);
-    const [user, setUser] = useState<{author: {"displayName": string, "userid": string}} | undefined>({author: {
+    const [editorState, setEditorState] = useState({
+        mode: "message",
+        messageIndicator: "",
+        messageID: 0,
+    });
+    const [user, setUser] = useState<{author: {"displayName": string, "userID": string}} | undefined>({author: {
         displayName: "",
-        userid: ""
+        userID: ""
     }});
-    const [pageIndex, setPageIndex] = useState<number>(null);
+    const [pageIndex, setPageIndex] = useState<number | null>(null);
     const [selectedTab, setSelectedTab] = useState<number>(0);
     const [serverSettings, setServerSettings] = useState<boolean>(false);
     const [targetUser, setTargetUser] = useState<Profile | null>(null);
     const [serverCodes, setServerCodes] = useState<{issued_by: string, invite_code: string}[] | null>(null);
-    const [serverLoaded, setServerLoaded] = useState<boolean>(false);
+    const [usersFilter, setUsersFilter] = useState<Profile[] | null>(null);
 
     // useEffect(() => {
     //     if (!messageBoxRef) return;
@@ -177,60 +203,48 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
 
     useEffect(() => {
         (async () => {
-            const res = await fetch(construct_path("api/user_access_status"), {
-                method: "POST",
+            const res = await fetch(construct_path("api/messages"), {
+                method: "GET",
                 headers: {
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "Server-ID": sid,
+                    "Page-Index": null,
+                    "Authorization": `Bearer ${token}`,
+                    "Apikey": Client.apikey,
                 },
-                body: JSON.stringify({
-                    sid: sid,
-                    token: token
-                })
-            });
-            const result = await res.json();
-
-            if  (result === false || result === undefined || result === null)
-                router.replace("/bubble");
-
-            setServerLoaded(true);
-        })();
-
-        if (!serverLoaded) return;
-
-        (async () => {
-            const res = await fetch(construct_path("api/messages_get"), {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ sid: sid, index: pageIndex }),
             });
             const data = await res.json();
+
+            if (res.status === 403 || res.status === 401 || res.status === 404) {
+                router.replace("/bubble");
+                return;
+            }
             const messages: messageFormat[] = data.messages;
 
             setChatContent(messages);
         })();
 
         (async () => {
-            const res = await fetch(construct_path("api/servers/server_info"), {
-                method: "POST",
+            const res = await fetch(construct_path(`api/servers?sid=${sid}`), {
+                method: "GET",
                 headers: {
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                    "Apikey": Client.apikey,
                 },
-                body: JSON.stringify({ sid: sid })
             });
             const data = await res.json();
             console.log("Server data: ", data)
             const server: serverInfo = data.server;
             setServer(server);
         })();
-    }, [sid, serverLoaded]);
+    }, [sid]);
 
     useEffect(() => {
         (async () => {
             em.emitEvent("get_user", { token: token });
         })();
-    }, []);
+    }, [token]);
 
     function sendMessage(): void {
         if (message === "" || !message) return;
@@ -241,7 +255,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
             return;
         };
         
-        switch (messageMode) {
+        switch (editorState.mode) {
             case "message":
                 em.emitEvent("send_message", {
                     token: token,
@@ -252,11 +266,11 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                 break;
                 
             case "edit":
-                edit_message(mid, message);
+                edit_message(editorState.messageID, message);
                 break;
                 
             case "reply":
-                reply_to_message(mid, message);
+                reply_to_message(editorState.messageID, message);
                 break;
                     
             default:                  
@@ -272,13 +286,13 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     
         function update_userlist(userID: string, status: "online" | "offline" | "idle") {
             setUserList(prev => {
-                const userOnline = prev.online.find(u => u.userid === userID);
-                const userOffline = prev.offline.find(u => u.userid === userID);
+                const userOnline = prev.online.find(u => u.userID === userID);
+                const userOffline = prev.offline.find(u => u.userID === userID);
 
                 if (status === "offline") {
                     if (userOnline) {
                         return {
-                            online: prev.online.filter(u => u.userid !== userID),
+                            online: prev.online.filter(u => u.userID !== userID),
                             offline: [...prev.offline, {...userOnline, status: "offline"}],
                         };
                     }
@@ -292,9 +306,9 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
 
                 return {
                     online: userOnline
-                        ? prev.online.map(u => (u.userid === userID ? updatedUser : u))
+                        ? prev.online.map(u => (u.userID === userID ? updatedUser : u))
                         : [...prev.online, updatedUser],
-                    offline: prev.offline.filter(u => u.userid !== userID),
+                    offline: prev.offline.filter(u => u.userID !== userID),
                 };
             });
         }
@@ -389,7 +403,10 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
         
         em.emitEvent("edit_message", { auth: token, message_id: message_id.toString(), content: content });
         
-        setMessageMode("message");
+        setEditorState(prev => ({
+            ...prev,
+            mode: "message"
+        }));
     };
 
     function reply_to_message(message_id: number, content: string) {
@@ -397,17 +414,22 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
         
         em.emitEvent("reply_to_message", { token: token, ref_id: message_id.toString(), content: content, sid: sid});
 
-        setMessageMode("message");
+        setEditorState(prev => ({
+            ...prev,
+            mode: "message"
+        }));
     };
 
     useEffect(() => {       
         (async () => {
-            const res = await fetch(construct_path("api/servers/userlist_get"), {
-                method: "POST",
+            const res = await fetch(construct_path("api/servers/userlist"), {
+                method: "GET",
                 headers: {
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
+                    "Server-ID": sid,
+                    "Authorization": `Bearer ${token}`,
+                    "Apikey": Client.apikey,
                 },
-                body: JSON.stringify({ "serverID": sid }),
             });
             
             const data = await res.json();
@@ -434,8 +456,17 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
     }, [chatContent]);
 
     useEffect(() => {
-        console.log(server);
-    }, [server]);
+        const match = message.match(/^@([a-zA-Z0-9]+)/)
+        if (match) {
+            const all_users: Profile[] = [];
+            userList.offline.map(user => all_users.push(user));
+            userList.online.map(user => all_users.push(user));
+            const usrs = all_users.filter(users => users.displayName.includes(match[1]));
+            setUsersFilter(usrs);
+        } else {
+            setUsersFilter(null);
+        }
+    }, [message]);
 
     useEffect(() => {
         const container = chatRef.current;
@@ -448,16 +479,18 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
             if (container.scrollTop <= 25 && !loading) {
                 loading = true;
                 
-                // Keep track of scroll height before fetching
                 const previousHeight = container.scrollHeight;
                 
                 try {
-                    const res = await fetch(construct_path("api/messages_get"), {
+                    const res = await fetch(construct_path("api/messages"), {
                         method: "POST",
                         headers: {
-                            "Content-Type": "application/json"
+                            "Content-Type": "application/json",
+                            "Server-ID": sid,
+                            "Page-Index": pageIndex.toString(),
+                            "Authorization": `Bearer ${token}`,
+                            "Apikey": Client.apikey
                         },
-                        body: JSON.stringify({ sid: sid, index: pageIndex - 1 }) // load previous page
                     });
                     const data = await res.json();
                     const newMessages: messageFormat[] = data.messages;
@@ -523,7 +556,7 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                                         <div key={index}>
                                             <li key={index}>{code.invite_code}</li>
                                             <button onClick={() => {
-                                                navigator.clipboard.writeText(`https://localhost/invite?code=${code.invite_code}`);
+                                                navigator.clipboard.writeText(`${globals.url_string.scheme}://${globals.url_string.subdomain}/invite?code=${code.invite_code}`);
                                             }}>Share</button>
                                         </div>
                                     ))}
@@ -546,20 +579,33 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                                 key={content.id}
                                 content={content}
                                 refMsgData={content.messageRef ? messageMap.get(content.messageRef) : undefined}
-                                isCurrentUser={content.userID === user.author.userid}
+                                isCurrentUser={content.userID === user.author.userID}
                                 onEdit={() => {
                                     setMessage(content.content.toString());
-                                    setIndicatorMessage("Editing message");
-                                    setMessageMode("edit");
-                                    setMid(content.id);
+
+                                    setEditorState({
+                                        messageIndicator: "Editing message",
+                                        mode: "edit",
+                                        messageID: content.id
+                                    });
                                 }}
                                 onReply={() => {
-                                    setMessageMode("reply");
-                                    setIndicatorMessage("Replying to message");
-                                    setMid(content.id);
+                                    setEditorState({
+                                        messageIndicator: "Replying to message",
+                                        mode: "reply",
+                                        messageID: content.id
+                                    });
                                 }}
                                 onDelete={() => delete_message(content.id, em)}
                             />
+                        ))}
+                    </div>
+
+                    <div>
+                        {usersFilter && usersFilter.map(user => ( 
+                            <div key={user.userID}>
+                                <p>@{user.displayName}</p>
+                            </div>
                         ))}
                     </div>
 
@@ -571,11 +617,14 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                             </label>
                         </span>
 
-                        {messageMode !== "message" &&
+                        {editorState.mode !== "message" &&
                             <div className={styles.messageIndicator}>
-                                <p>{indicatorMessage}</p>
+                                <p>{editorState.messageIndicator}</p>
                                 <button onClick={() => {
-                                    setMessageMode("message");
+                                    setEditorState(prev => ({
+                                        ...prev,
+                                        mode: "message"
+                                    }))
                                     setMessage("");
                                 }}>X</button>
                             </div>
@@ -588,11 +637,11 @@ export default function Chat({ params }: { params: Promise<{ id: string }> }) {
                                     sendMessage();
                                 }
                             }}></textarea>
-                            <button onClick={sendMessage} className={styles.sendButton}>
+                            {message.length > 0 && <button onClick={sendMessage} className={styles.sendButton}>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className="bi bi-send" viewBox="0 0 16 16">
                                     <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76z"/>
                                 </svg>
-                            </button>
+                            </button>}
                         </div>
                     </div>
                 </div>

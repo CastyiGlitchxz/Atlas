@@ -1,13 +1,19 @@
+export const Client = {
+    name: "Atlas Web Client",
+    apikey: process.env.NEXT_PUBLIC_APIKEY,
+}
+
 export interface serverFormat {
     name: string;
     owner: string;
     serverID: string;
+    icon: string | null;
 };
 
 export interface Account {
     username: string;
-    userid: string;
-    email: string
+    userID: string;
+    email: string;
 };
 
 export enum appearanceStatus {
@@ -16,12 +22,26 @@ export enum appearanceStatus {
     "offline"
 }
 
+export enum relationshipType {
+    accepted,
+    pending,
+    blocked
+}
+
+export interface Friends {
+    friends: Friend[];
+    requests: Friend[];
+}
+
+export interface Friend extends Profile {
+    id: number;
+}
 export interface Profile {
     displayName: string;
     status: appearanceStatus | ("online" | "offline" | "idle");
     picture?: string;
     customStatus?: string;
-    userid: string;
+    userID: string;
     bio: string;
 };
 

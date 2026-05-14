@@ -1,12 +1,12 @@
-#include "headers/database.hpp"
-#include "headers/messaging.hpp"
+#include "../headers/database.hpp"
+#include "../headers/messaging.hpp"
+#include "../headers/abstract.hpp"
 #include <iomanip>
 #include <iostream>
 #include <optional>
 #include <vector>
 #include <nlohmann/json.hpp>
 #include <chrono>
-#include "headers/abstract.hpp"
 #include <yaml-cpp/yaml.h>
 
 using json = nlohmann::json;
@@ -73,7 +73,6 @@ json get_messages(const std::string serverID, std::optional<int> index) {
 
     json result;
     result["messages"] = json::array();
-    result["status"] = true;
 
     std::vector<json> messageList;
 
@@ -85,7 +84,7 @@ json get_messages(const std::string serverID, std::optional<int> index) {
         std::string query = 
             "SELECT m.id, m.server_id, m.user_id, m.content, m.timestamp, u.displayname, u.profile_picture, m.message_ref, m.link "
             "FROM messages m "
-            "JOIN users u ON m.user_id = u.user_id " // Fetch user data in the same breath
+            "JOIN users u ON m.user_id = u.user_id "
             "WHERE m.server_id = " + txn.quote(serverID);
 
         if (index.has_value()) {
@@ -97,7 +96,7 @@ json get_messages(const std::string serverID, std::optional<int> index) {
         pqxx::result r = txn.exec(query);
         
         for (auto row : r) {
-            std::tm tm = parseTimestamp(r[0]["timestamp"].as<std::string>());
+            std::tm tm = parseTimestamp(row["timestamp"].as<std::string>());
             std::ostringstream oss;
             oss << std::put_time(&tm, "%I:%M %p"); // 12-hour with AM/PM
 
@@ -125,7 +124,6 @@ json get_messages(const std::string serverID, std::optional<int> index) {
         }
 
     } catch (const std::exception& e) {
-        result["status"] = false;
         result["what"] = e.what();
     }
 
@@ -226,4 +224,17 @@ json edit_message(int message_id, std::string& content) {
     }
 
     return result;
+}
+
+json get_groups_chats() {
+    json result = json::object();
+
+    try {
+        Database db = connect_db();
+        auto& conn = db.getConnection();
+
+        
+    } catch(std::exception& e) {
+        result["error"] = e.what();
+    }
 }

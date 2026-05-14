@@ -38,11 +38,11 @@
 
 // User panel
 .userPanel {
-    width: 37rem;
+    width: 35%;
     background: #161616;
     margin: 12px;
     border-radius: 20px;
-    padding: 10px;
+    padding: 3px;
     display: flex;
     flex-direction: column;
     gap: 19px;
@@ -54,12 +54,21 @@
     object-fit: cover;
 }
 
-.userPanel span {
-    background-color: rgb(0, 0, 0);
-    display: flex;
+// .userPanel span {
+//     background-color: rgb(0, 0, 0);
+//     display: flex;
+//     align-items: center;
+//     border-radius: 7px;
+//     height: 3rem;
+// }
+
+.user-content {
+    display: grid;
+    grid-template-rows: 22px;
     align-items: center;
-    border-radius: 7px;
-    height: 3rem;
+    height: 100%;
+    align-content: center;
+    gap: 6px;
 }
 
 .userPanelHeader {
@@ -91,8 +100,17 @@
     gap: 7px;
 }
 
-.userQC {
-    padding: 10px;
+.user-custom-status {
+    text-shadow: 3px 3px 4px #303030;
+    -webkit-text-stroke: 1px #000000;
+    font-weight: 600;
+}
+
+.user-username {
+    font-size: 30px;
+    text-shadow: 3px 3px 4px black;
+    -webkit-text-stroke: 1px #545454;
+    font-weight: 600;
 }
 
 .bioPanel {

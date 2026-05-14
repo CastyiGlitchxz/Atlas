@@ -1,9 +1,8 @@
-#include "headers/filesystem.hpp"
-#include <boost/beast/core/buffers_to_string.hpp>
+#include <boost/beast.hpp>
 #include <fstream>
 #include <iostream>
 
-std::string handle_images(std::vector<unsigned char> buffer, std::pair<size_t, size_t> result, const std::string& image_name) {
+inline  std::string handle_images(std::vector<unsigned char> buffer, std::pair<size_t, size_t> result, const std::string& image_name) {
     std::string assets_folders = "../assets/users/photos/";
     std::string fpath = assets_folders + image_name;
     std::string pretty_path;

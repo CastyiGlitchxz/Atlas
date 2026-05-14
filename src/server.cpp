@@ -1,12 +1,10 @@
+#include "../headers/database.hpp"
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
-#include "headers/database.hpp"
-#include <exception>
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <optional>
-#include <pqxx/internal/result_iter.hxx>
 #include <string>
 
 using json = nlohmann::json;
@@ -42,7 +40,7 @@ json server_get_all_users(const std::string server_id) {
                 {"status", status},
                 {"picture", picture},
                 {"customStatus", uscms},
-                {"userid", user_id},
+                {"userID", user_id},
                 {"bio", bio}
             });
             response["status"] = 200;
@@ -150,7 +148,7 @@ json check_user_in_server(std::string& UUID, std::string& serverID) {
     return response;
 }
 
-json join_server(const std::string server_id, const std::string UUID) {
+json join_server(const std::string serverID, const std::string UUID) {
     json response;
 
     try {
@@ -158,7 +156,7 @@ json join_server(const std::string server_id, const std::string UUID) {
         auto& conn = db.getConnection();
 
         pqxx::work txn(conn);
-        pqxx::result r = txn.exec_params("INSERT INTO user_servers (sid, uid) VALUES (" + txn.quote(server_id) + ", " + txn.quote(UUID) + ") RETURNING sid;");
+        pqxx::result r = txn.exec("INSERT INTO user_servers (sid, uid) VALUES (" + txn.quote(serverID) + ", " + txn.quote(UUID) + ") RETURNING sid;");
 
         txn.commit();
 

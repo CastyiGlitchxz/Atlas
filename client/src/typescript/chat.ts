@@ -1,5 +1,5 @@
 export function isHyperlink(src: string): boolean {
-    const check = src.match(/^(https|http)?:\/\/[a-zA-Z0-9.-]+(?:(?::[0-9]+)|\.(com|net|jpg|png|jpeg)\\[a-zA-Z0-9.-]+)/);
+    const check = src.match(/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/);
     return check ? true : false;
 };
 

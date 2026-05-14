@@ -42,7 +42,7 @@ export default function VoiceChat() {
 
       // 4. WAIT FOR ICE GATHERING (Crucial for Tailscale/Nginx)
       // This ensures the SDP sent to Python isn't "empty" of network paths
-      await new Promise((resolve) => {
+      await new Promise<void>((resolve) => {
         if (pc.current.iceGatheringState === 'complete') {
           resolve();
         } else {
@@ -95,7 +95,7 @@ export default function VoiceChat() {
       <br />
       
       {/* Show controls temporarily to verify the audio stream is active */}
-      <audio ref={remoteAudioRef} autoPlay playsInline controls style={{ display: 'block', margin: '20px auto' }} />
+      <audio ref={remoteAudioRef} autoPlay controls style={{ display: 'block', margin: '20px auto' }} />
 
       <button 
         onClick={joinChat} 
