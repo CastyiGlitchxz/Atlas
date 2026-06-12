@@ -94,7 +94,7 @@ void handle_http(tcp::socket& socket,
         res.set(http::field::access_control_allow_origin, "*");
         res.set(http::field::access_control_allow_credentials, "true");
         res.set(http::field::access_control_allow_methods, "GET, POST, OPTIONS");
-        res.set(http::field::access_control_allow_headers, "Content-Type, Authorization");
+        res.set(http::field::access_control_allow_headers, "Content-Type, Authorization, apikey, server-id, page-index");
         res.set(http::field::access_control_max_age, "86400"); // Cache preflight result
 
         // Send the empty response immediately
@@ -118,7 +118,7 @@ void handle_http(tcp::socket& socket,
         res.prepare_payload();
     }
 
-    res.set(http::field::access_control_allow_origin, "http://localhost:3000"); // Standard practice: be specific
+    res.set(http::field::access_control_allow_origin, "*"); // Standard practice: be specific
     res.set(http::field::access_control_allow_credentials, "true");
 
     http::write(socket, res);
