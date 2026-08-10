@@ -1,5 +1,4 @@
 export const Client = {
-    name: "Atlas Web Client",
     apikey: process.env.NEXT_PUBLIC_APIKEY,
 }
 
@@ -36,6 +35,13 @@ export interface Friends {
 export interface Friend extends Profile {
     id: number;
 }
+
+export interface clientINT {
+    clientName: string;
+    internalSlug: string;
+    isTrusted: boolean;
+}
+
 export interface Profile {
     displayName: string;
     status: appearanceStatus | ("online" | "offline" | "idle");
@@ -43,13 +49,16 @@ export interface Profile {
     customStatus?: string;
     userID: string;
     bio: string;
-};
+    client?: clientINT;
+}
 
-export interface messageFormat {
+export interface IMessageFormat {
     id: number;
     picture: string;
     displayName: string;
-    serverID: string;
+    channelID: string;
+    groupID: string;
+    receiverID: string;
     content: string;
     timestamp?: string;
     messageRef: number;
@@ -66,11 +75,18 @@ export interface loginResponse {
     error?: string;
 };
 
-export interface serverInfo {
+export interface IChannel {
+    channelID: bigint;
+    channelName: string;
+}
+
+export interface IServerData {
     icon: (null | string);
     owner: {
-        user_id: string;
-        username: string;
+        userID: string;
+        displayName: string;
+        avatar: string;
     }
-    server_name: string;
+    serverName: string;
+    channels: IChannel[]
 }

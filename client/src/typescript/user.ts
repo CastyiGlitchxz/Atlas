@@ -12,6 +12,24 @@ export function get_token(): string {
     return token;
 };
 
+export function getUserIDCache(): (string | undefined) {
+    const id: (string | undefined) = window.localStorage.getItem("cached_userID");
+
+    if (!id || id === undefined || id === null) {
+        return undefined;
+    }
+
+    return id;
+}
+
+export function setUserIDCache(userID: string): void {
+    const exist: string = getUserIDCache();
+
+    if (exist === undefined) {
+        window.localStorage.setItem("cached_userID", userID);
+    }
+}
+
 export async function login_status(): Promise<boolean> {
     const token = get_token();
 

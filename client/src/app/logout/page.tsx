@@ -4,7 +4,6 @@ import React, { useEffect, useState } from "react"
 import { construct_path } from "../../typescript/env";
 import { get_token } from "../../typescript/user";
 import { useRouter } from "next/navigation";
-import { eventManager } from "../../typescript/eventsManager";
 import { Client } from "../../typescript/interfaces";
 
 export default function LogoutPage() {
@@ -14,7 +13,6 @@ export default function LogoutPage() {
 
     useEffect(() => {
         async function handle_logout() {
-            const em = new eventManager();
             const token = get_token();
 
             const res = await fetch(construct_path("api/logout"), {
@@ -29,9 +27,8 @@ export default function LogoutPage() {
             if (res.status === 200) {
                 setTimerState(true);
                 localStorage.removeItem("token");
+                localStorage.removeItem("cached_userID");
             }
-
-            em.emitEvent("update_status", { auth: token, status: "offline" });
         }
 
         handle_logout();

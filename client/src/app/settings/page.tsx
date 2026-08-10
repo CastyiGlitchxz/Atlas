@@ -79,9 +79,8 @@ export default function SettingsPage() {
         const connectWS = () => {
             const ws = getWebSocket();
             if (wsRef.current) return;
-            ws.binaryType = "arraybuffer"; // important for binary
+            ws.binaryType = "arraybuffer";
             ws.onopen = () => console.log("WebSocket connected");
-            ws.onmessage = (msg) => console.log("Server says:", msg.data);
             wsRef.current = ws;
         };
 
@@ -195,7 +194,7 @@ export default function SettingsPage() {
                 <Tabs selectedTab={selectedTab}>
                     <Tab>
                         <div>
-                            <div className={styles.userBanner} style={{ background: `url('${user.picture}')` }}>
+                            <div className={styles.userBanner} style={{ background: `url('${globals.url_string.scheme}://${globals.url_string.subdomain}${user.picture}')` }}>
                                 <div className={styles.profileInformation}>
                                     <label htmlFor="pfp_change">
                                         <img src={`${globals.url_string.scheme}://${globals.url_string.subdomain}${user.picture}`} alt="e" width={100} height={100} className={styles.profilePicture}/>

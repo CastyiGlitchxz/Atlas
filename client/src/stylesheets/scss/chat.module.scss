@@ -1,6 +1,86 @@
 .main {
-    display: grid;
     width: 95%;
+    display: flex;
+    flex-direction: column;
+}
+
+.welcome {
+    width: 100%;
+    height: 100%;
+    padding: 20px;
+}
+
+.rules-panel {
+    width: 100%;
+    height: 450px;
+    border-radius: 20px;
+    background: rgb(22, 22, 22);
+    padding: 14px;
+    gap: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.rules-panel textarea {
+    height: 100%;
+    resize: none;
+    padding: 6px;
+    outline: none;
+    border-radius: 6px;
+    line-height: 22px;
+}
+
+.server-actions-panel {
+    width: 380px;
+    padding: 15px;
+    gap: 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.server-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.server-actions div {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 9px;
+}
+
+.server-actions button {
+    width: fit-content;
+    min-width: 26px;
+    min-height: 15;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: none;
+}
+
+.channel-button {
+    width: 100%;
+    height: 31px;
+    background: none;
+    border: 0;
+    border-right: 2px solid black;
+    text-align: left;
+    text-indent: 17px;
+    font-size: 14px;
+    font-weight: 550;
+    border-radius: 2px;
+    transition:  0.3s all ease-in-out;
+}
+
+.channel-button:hover {
+    border-right: 2px solid red;
+}
+
+.channel-button:active {
+    box-shadow: 0px 1px 2px 0.5px white inset;
 }
 
 .contextBar {
@@ -15,7 +95,8 @@
 
 .mainChat {
     display: flex;
-    width: 95%;
+    width: 100%;
+    height: 93%;
 }
 
 #chat {
@@ -53,16 +134,16 @@
     color: rgb(168, 200, 255);
 }
 
-.serverSettingsPanel {
-    z-index: 5;
+.server-settings-panel {
+    z-index: 9;
     background: #090909f7;
-    border-radius: 20px;
-    width: 77vw;
-    height: 60vh;
+    width: 100%;
+    height: 100%;
     padding: 20px;
     display: grid;
     position: fixed;
     border: 1px solid #2d2d2d;
+    left: 0;
 }
 
 .serverSettingsFlexbox {
@@ -88,7 +169,7 @@
     align-items: center;
 }
 
-.serverSettingsTabs {
+.server-settings-tabs {
     display: grid;
     gap: 5px;
     align-items: baseline;
@@ -96,16 +177,71 @@
     width: 200px;
 }
 
-.serverSettingsTabs button {
+.server-settings-content-container {
     width: 100%;
+}
+
+.settings-close-button {
+    width: 40px;
     height: 40px;
-    border-radius: 8px;
-    border: none;
+    border-radius: 100px;
+}
+
+.members-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.members-list-display-name {
+    font-weight: 650;
+}
+
+.members-list-user-options {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
+
+.members-list-user-options button {
+    height: 40px;
+    width: 40px;
+    border-radius: 100px;
+}
+
+.members-list-user {
+    display: flex;
+    width: 80%;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    justify-content: space-between;
+}
+
+.members-list-user .avatar {
+    border-radius: 100px;
+    border: 1.5px solid gray;
+    object-fit: cover;
+}
+
+.server-settings-tabs button {
     text-align: left;
     text-indent: 12px;
+    border: none;
+    border-radius: 8px 0px 0px 8px;
+    width: 100%;
+    height: 42px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Open Sans, Helvetica Neue, sans-serif;
     font-size: 17px;
-    font-weight: 550;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-weight: 540;
+    background: transparent;
+    border-left: 1px solid red;
+    transition: all 0.3s ease-in-out;
+}
+
+.server-settings-tabs button:hover {
+    background: #262626;
+    transform: translateX(8px);
 }
 
 .centerContainer {
@@ -121,16 +257,19 @@
     justify-content: center;
 }
 
-.messageBar {
+.message-bar {
     display: flex;
-    background: rgb(42, 42, 42);
+    background: rgb(22, 22, 22);
     height: 70%;
-    width: 53%;
-    border-radius: 12px;
+    width: 80%;
+    border-radius: 11px;
     padding: 6px;
+    align-items: center;
+    gap: 12px;
+    border: 0.5px solid gray;
 }
 
-.messageBar textarea {
+.message-bar textarea {
     background: none;
     color: white;
     outline: none;
@@ -143,15 +282,19 @@
     padding: 7px;
 }
 
-.sendButton {
+.send-button {
     width: 10%;
-    background: blue;
+    background: transparent;
     border-radius: 10px;
     border: none;
-    font-size: 17px;
     display: flex;
     justify-content: center;
     align-items: center;
+    height: 100%;
+}
+
+.send-button svg:hover {
+    color: rgb(85, 85, 252);
 }
 
 .message {
@@ -522,10 +665,119 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    border: 1px solid gray;
     font-size: 30px;
     padding: 17px;
-    margin: 0 12px;
+}
+
+.server-owner-card {
+    // background: rgb(44, 44, 44);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12;
+    width: fit-content;
+    padding: 5px 10px;
+    border-radius: 12px;
+}
+
+.server-owner-avatar {
+    border-radius: 100px;
+    border: 1px solid gray;
+}
+
+.server-icon {
+    width: 160px;
+    height: 160px;
+    border-radius: 100px;
+    object-fit: cover;
+}
+
+.codes-table {
+    display: flex;
+    flex-direction: column;
+    background: #d4defb;
+    height: fit-content;
+    width: fit-content;
+    border-radius: 15px;
+    padding: 14;
+    gap: 10px;
+}
+
+
+.codes-table-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+
+.table-column {
+    width: 230px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    // background: orange;
+    font-weight: bold;
+    color: black;
+    font-size: 17px;
+    border-right: 1px solid black;
+}
+
+.table-delete-button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: none;
+    border: none;
+    border-radius: 12px;
+    color: black;
+}
+
+.table-share-button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: none;
+    border: none;
+    border-radius: 12px;
+    color: black;
+    padding: 6px;
+}
+
+.table-delete-button:hover {
+    background: gray;
+}
+
+.table-share-button:hover {
+    background: gray;
+}
+
+.column-name {
+    font-weight: 900;
+    font-size: 21px;
+}
+
+.column-short {
+    width: 50px;
+}
+
+.codes-table-list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    height: 50px;
+    // background: red;
+    color: green;
+}
+
+.channel-creation-panel {
+    width: 50vw;
+    height: 100vh;
+    background: black;
+    position: fixed;
+    z-index: 19;
+    right: 0;
 }
 
 @media (max-width: 768px) {

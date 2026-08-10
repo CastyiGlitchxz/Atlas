@@ -18,10 +18,11 @@ add_executable(atlas_server
     main.cpp 
     src/database.cpp 
     src/messaging.cpp 
-    src/server.cpp 
-    src/invites.cpp 
+    src/servers/server_service.cpp
+    src/servers/channel_service.cpp 
     src/key_manager.cpp
     src/relationships.cpp
+    src/notifications/notification_daemon.cpp
 )
 
 target_include_directories(atlas_server PRIVATE 

@@ -1,5 +1,6 @@
-#include "../headers/database.hpp"
-#include "../headers/abstract.hpp"
+#include "../include/database.hpp"
+#include "../include/models/user_models.hpp"
+#include <exception>
 #include <iostream>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
@@ -149,7 +150,7 @@ bool login_user(std::string& username, std::string& password) {
 
         std::string uPassword = r[0]["password"].c_str();
 
-        if (argon2id_verify(uPassword.c_str(), password.c_str(), password.size()) == ARGON2_OK) {
+        if (argon2id_verify(uPassword.c_str(), password.c_str(), static_cast<uint32_t>(password.size())) == ARGON2_OK) {
             std::cout << "Login successful!\n";
             return true;
         } else {
@@ -157,10 +158,8 @@ bool login_user(std::string& username, std::string& password) {
             return false;
         }
     } catch (std::exception &e) {
-        std::cerr << e.what() << "\n";
-        return json{
-            {"error", e.what()}
-        };
+        std::cerr << "Database or Auth Error: " << e.what() << "\n";
+        return false;
     }
 }
 
@@ -255,14 +254,14 @@ json user_get_all_servers(const std::string& UUID) {
         );
 
         for (auto row : r) {
-            std::string serverId = row["server_id"].as<std::string>();
+            std::string serverID = row["server_id"].as<std::string>();
             std::string serverName = row["server_name"].c_str();
             std::string owner = row["owner"].c_str();
             std::optional<std::string> icon = row["icon"].as<std::optional<std::string>>();
             
             response["servers"].push_back({
                 {"name", serverName},
-                {"serverID", serverId},
+                {"serverID", serverID},
                 {"owner", owner},
                 {"icon", icon}
             });
@@ -291,7 +290,7 @@ json lookat_user(std::string& username) {
             username
         );
 
-        std::string displayName = r[0]["displayName"].as<std::string>();
+        std::string displayName = r[0]["displayname"].as<std::string>();
         std::string avatar = r[0]["profile_picture"].as<std::string>();
         std::string bio = r[0]["bio"].as<std::string>();
 
@@ -338,44 +337,26 @@ std::string set_user_profile_picture(const std::string& UUID, const std::string&
     }
 }
 
-std::string generate_server_code(std::string& user_id, std::string& sid) {
+bool save_device_token(const std::string& device_token, const std::string& userID) {
     try {
-        size_t length = 5;
-    
-        const std::string characters = 
-            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        
-        std::random_device rd;
-        std::mt19937 generator(rd());
-    
-        std::uniform_int_distribution<> distribution(0, characters.length() - 1);
-        
-        std::string code;
-        code.reserve(length);
-    
-        for (size_t i = 0; i < length; ++i) {
-            code += characters[distribution(generator)];
-        }
-
-        std::cout << "[Code] " << code << "\n";
-
         Database db = connect_db();
         auto& conn = db.getConnection();
         pqxx::work txn(conn);
         pqxx::result r = txn.exec(
-            "INSERT INTO server_invites (issued_by, code, expires, sid) VALUES (" +
-                txn.quote(user_id) + "," +
-                txn.quote(code) + "," +
-                txn.quote("2027-02-06 00:00:00") + "," +
-                txn.quote(sid) +
+            "INSERT INTO device_tokens (user_id, token) VALUES (" +
+                txn.quote(userID) + "," +
+                txn.quote(device_token) + 
             ")"
         );
-
         txn.commit();
-        return code;
-    } catch (std::exception& e) {
-        std::cout << e.what() << std::endl;
+
+        if (r.empty()) {
+            return false;
+        }
+
+        return true;
+    } catch (const std::exception& e) {
+        std::cout << e.what() << "\n";
+        return false;
     }
-    
-    return "";
 }

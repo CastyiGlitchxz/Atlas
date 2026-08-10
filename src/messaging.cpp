@@ -1,6 +1,6 @@
-#include "../headers/database.hpp"
-#include "../headers/messaging.hpp"
-#include "../headers/abstract.hpp"
+#include "../include/database.hpp"
+#include "../include/messaging.hpp"
+#include "../include/models/user_models.hpp"
 #include <iomanip>
 #include <iostream>
 #include <optional>
@@ -68,7 +68,7 @@ json get_user_by_UUID(const std::string& UUID) {
     return result;
 }
 
-json get_messages(const std::string serverID, std::optional<int> index) {
+json get_messages(uint64_t channelID, std::optional<int> index) {
     static int messageLimit = YAML::LoadFile("../config/app-config.yml")["chat"]["message_limit"].as<int>();
 
     json result;
@@ -82,10 +82,10 @@ json get_messages(const std::string serverID, std::optional<int> index) {
         pqxx::nontransaction txn(conn);
 
         std::string query = 
-            "SELECT m.id, m.server_id, m.user_id, m.content, m.timestamp, u.displayname, u.profile_picture, m.message_ref, m.link "
+            "SELECT m.id, m.channel_id, m.user_id, m.content, m.timestamp, u.displayname, u.profile_picture, m.message_ref, m.link "
             "FROM messages m "
             "JOIN users u ON m.user_id = u.user_id "
-            "WHERE m.server_id = " + txn.quote(serverID);
+            "WHERE m.channel_id = " + txn.quote(channelID);
 
         if (index.has_value()) {
             query += " AND m.id < " + txn.quote(index.value());
@@ -105,7 +105,7 @@ json get_messages(const std::string serverID, std::optional<int> index) {
 
             json message;
             message["id"] = row["id"].as<int>();
-            message["server_id"] = row["server_id"].as<std::string>();
+            message["channelID"] = row["channel_id"].as<std::string>();
             message["displayName"] = row["displayName"].as<std::string>();
             message["picture"] = row["profile_picture"].as<std::string>();
             message["content"] = row["content"].as<std::string>();
@@ -130,21 +130,21 @@ json get_messages(const std::string serverID, std::optional<int> index) {
     return result;
 }
 
-json create_message(const std::string& user_id, const MessageFormat& message) {
+json create_message(const std::string& userID, const MessageFormat& message) {
     json result;
 
     try {
         Database db = connect_db();
         auto& conn = db.getConnection();
 
-        pqxx::work txn(conn); // transaction
+        pqxx::work txn(conn);
 
         auto time = getCurrentTimestamp();
 
-        std::string sql = "INSERT INTO messages (user_id, content, server_id, timestamp, message_ref, link) VALUES (" +
-            txn.quote(user_id) + ", " +
+        std::string sql = "INSERT INTO messages (user_id, content, channel_id, timestamp, message_ref, link) VALUES (" +
+            txn.quote(userID) + ", " +
             txn.quote(message.content) + ", " +
-            txn.quote(message.serverID) + ", " +
+            txn.quote(message.channelID) + ", " +
             txn.quote(time) + ", " +
             txn.quote(message.messageRef) + ", " +
             txn.quote(message.link) + ") RETURNING id, timestamp;";
@@ -155,14 +155,14 @@ json create_message(const std::string& user_id, const MessageFormat& message) {
         txn.commit();
 
         if (!r.empty()) {
-            std::string message_id = r[0]["id"].as<std::string>();
+            int messageID = r[0]["id"].as<int>();
             std::tm tm = parseTimestamp(r[0]["timestamp"].as<std::string>());
 
             std::ostringstream oss;
             oss << std::put_time(&tm, "%I:%M %p"); // 12-hour with AM/PM
             std::string time12h = oss.str();
 
-            result["id"] = message_id;
+            result["id"] = messageID;
             result["timestamp"] = time12h;
             result["success"] = true;
             result["message"] = "Message added successfully";
@@ -184,7 +184,7 @@ json create_message(const std::string& user_id, const MessageFormat& message) {
     return result;
 }
 
-json delete_message(int message_id) {
+json delete_message(int messageID) {
     json result;
 
     try {
@@ -192,7 +192,7 @@ json delete_message(int message_id) {
         auto& conn = db.getConnection();
 
         pqxx::work txn(conn);
-        txn.exec_params("DELETE FROM messages WHERE id = $1", message_id);
+        txn.exec_params("DELETE FROM messages WHERE id = $1", messageID);
         txn.commit();
 
         result["success"] = true;
@@ -205,7 +205,7 @@ json delete_message(int message_id) {
     return result;
 }
 
-json edit_message(int message_id, std::string& content) {
+json edit_message(int messageID, std::string& content) {
     json result;
 
     try {
@@ -213,7 +213,7 @@ json edit_message(int message_id, std::string& content) {
         auto& conn = db.getConnection();
 
         pqxx::work txn(conn);
-        txn.exec_params("UPDATE messages SET content = $1 WHERE id = $2", content, message_id);
+        txn.exec_params("UPDATE messages SET content = $1 WHERE id = $2", content, messageID);
         txn.commit();
 
         result["success"] = true;

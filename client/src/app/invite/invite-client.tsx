@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { eventManager } from "../../typescript/eventsManager";
 import { getWebSocket } from "../../typescript/websocket";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -13,7 +13,7 @@ export default function Invite() {
     const code = searchParams.get("code");
     const router = useRouter();
 
-    const em = new eventManager();
+    const em = useMemo(() => new eventManager(), []);
 
     const [server, setServer] = useState<{
         issuer: string,
@@ -23,18 +23,22 @@ export default function Invite() {
             icon: string | null
         },
     }>();
-    
-    useEffect(() => {
-        const ws = getWebSocket();
-        ws.onopen = () => {
-            em.emitEvent("verify_invite", { "code": code });
-        };
 
-        ws.onmessage = (msg) => {
+    useEffect(() => {
+        if (!code) return;
+        const ws = getWebSocket();
+
+        ws.onopen = function() {
+            em.emitEvent("verify_invite", { "code": code });
+        }
+
+
+        const handler = (msg: MessageEvent) => {
             const {event, data} = JSON.parse(msg.data);
 
             switch(event) {
                 case "invite":
+                    console.log(data)
                     if (!data.failed) {
                         setServer({
                             issuer: data.issued_by,
@@ -59,12 +63,14 @@ export default function Invite() {
                 default:
                     break;
             }
-        }
-        return () => {
-            ws.onmessage = null;
-            ws.onopen = null;
         };
-    }, []);
+
+        ws.addEventListener("message", handler);
+        
+        return () => {
+            ws.removeEventListener("message", handler);
+        };
+    }, [code]);
 
     function join_server() {
         const token = get_token();

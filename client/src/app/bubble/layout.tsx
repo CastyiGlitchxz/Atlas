@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { useRouter } from "next/navigation";
-import { get_token } from "../../typescript/user";
+import { get_token, getUserIDCache } from "../../typescript/user";
 import { construct_path, globals } from "../../typescript/env";
 import styles from "../../stylesheets/css/chat.module.css";
 import { getWebSocket } from "../../typescript/websocket";
@@ -20,19 +20,6 @@ const geistMono = Geist_Mono({
     variable: "--font-geist-mono",
     subsets: ["latin"],
 });
-
-function find_server(inviteCode: string) {
-    const em = new eventManager();
-
-    em.emitEvent("verify_invite", { "code": inviteCode });
-};
-
-function join_server(serverID: string) {
-    const em = new eventManager();
-
-    const token = get_token();
-    em.emitEvent("join_server", { "token": token, sid: serverID });
-};
 
 export default function RootLayout({
     children,
@@ -71,34 +58,25 @@ export default function RootLayout({
         em.emitEvent("create_server", { token: token, server_name: server.name });
     };
 
-    useEffect(() => {
+    function find_server(inviteCode: string) {
+        em.emitEvent("verify_invite", { "code": inviteCode });
+    };
+
+    function join_server(serverID: string) {
         const token = get_token();
-        em.emitEvent("update_status", { auth: token, status: "online" });
-    }, []);
+        em.emitEvent("join_server", { "token": token, sid: serverID });
+    };
 
-    useEffect(() => {
-        const token = get_token();
+    function newNotification(data) {
+        const notification = new Notification(`Message from ${data.sender.displayName}`, {
+            body: data.sender.message,
+            icon: data.sender.picture,
+        });
 
-        document.onfocus = function() {
-            setTimeout(() => {
-                em.emitEvent("update_status", { auth: token, status: "online" });
-            }, 1000);
+        notification.onclick = function() {
+            router.push(`/bubble/server/${data.serverID}/${data.channelID.toString()}`);
         };
-        
-        document.onblur = function() {
-            setTimeout(() => {
-                em.emitEvent("update_status", { auth: token, status: "idle" });
-            }, 1000);
-        };
-    }, []);
-    
-    // useEffect(() => {
-    //     const token = get_token();
-
-    //     window.onbeforeunload = function() {
-    //         em.emitEvent("update_status", { auth: token, status: "offline" });
-    //     }
-    // });
+    }
 
     useEffect(() => {
         (async () => {
@@ -113,7 +91,11 @@ export default function RootLayout({
                 },
             });
             const data = await res.json();
-            console.log(data)
+
+            if (res.status === 403 || res.status === 401 || res.status === 404 || res.status === 500) {
+                router.replace("/");
+                return;
+            }
 
             setServerList(data.servers);
         })();
@@ -122,22 +104,8 @@ export default function RootLayout({
     useEffect(() => {
         const ws = getWebSocket();
 
-        const newNotification = (data) => {
-            const notification = new Notification(`Message from ${data.sender.displayName}`, {
-                body: data.sender.message,
-                icon: data.sender.picture,
-            });
-
-            notification.onclick = function() {
-                router.push(`/bubble/server/${data.serverID}`);
-            };
-        }
-
         const handler = (msg: MessageEvent) => {
             const {event, data} = JSON.parse(msg.data);
-            
-            const token = get_token();
-            const server: serverFormat = data.server;
 
             switch(event) {
                 case "invite":
@@ -160,9 +128,15 @@ export default function RootLayout({
                     break;
 
                 case "notification":
-                    // if (!data.sender.token || sameChat || document.hasFocus() && sameChat) break;
-                    if (!data.sender || data.sender.token === token) break;
+                    console.log(data)
+                    if (!data.sender || data.sender.userID === getUserIDCache() || String(data.channelID) === document.location.pathname.split('/')[4]) break;
                     newNotification(data);
+                    break;
+
+                case "user_left":
+                    if (getUserIDCache() === data.userID) {
+                        setServerList(prev => prev.filter(s => s.serverID !== data.serverID));
+                    }
                     break;
                     
                     default:

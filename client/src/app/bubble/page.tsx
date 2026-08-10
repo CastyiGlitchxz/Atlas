@@ -133,7 +133,7 @@ export default function Bubble() {
 
                 <div className={styles["friends-list"]}>
                     <strong>Friends</strong>
-                    <div className={styles["friend-list-content"]}>
+                    <div className={styles["friends-list-content"]}>
                         {relationsList?.friends ? 
                             relationsList.friends.map((friend) => (
                                 <div className={styles["bubble-friend"]} key={friend.id}>
