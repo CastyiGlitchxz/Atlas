@@ -1,3 +1,4 @@
+#include <stdexcept>
 #include <string>
 #include <nlohmann/json.hpp>
 #include <pqxx/pqxx>
@@ -11,22 +12,32 @@ enum RelationshipTypes {
 
 namespace pqxx {
     template<> struct string_traits<RelationshipTypes> {
-
-        static char *into_buf(char *begin, char *end, RelationshipTypes const &value) {
-            std::string s;
+        
+        // 1. The modern "to_buf" replacement
+        static char *to_buf(char *begin, char *end, RelationshipTypes const &value) {
+            std::string_view s;
             switch (value) {
                 case RelationshipTypes::pending:  s = "pending"; break;
                 case RelationshipTypes::accepted: s = "accepted"; break;
                 case RelationshipTypes::blocked:  s = "blocked"; break;
                 default:                          s = "unknown"; break;
             }
-            return string_traits<std::string_view>::into_buf(begin, end, s);
+            
+            // Check for buffer overflow
+            if (static_cast<std::size_t>(end - begin) <= s.size())
+                throw std::runtime_error("libpqxx: conversion buffer too small.");
+
+            std::memcpy(begin, s.data(), s.size());
+            begin[s.size()] = '\0';
+            return begin + s.size();
         }
 
-        static size_t size_buffer(RelationshipTypes const &value) noexcept {
-            return 32;
+        // 2. The size hint (required by to_buf)
+        static constexpr std::size_t size_buffer(RelationshipTypes const &) noexcept {
+            return 16; // "accepted" + null terminator is 9, so 16 is plenty
         }
 
+        // 3. Conversion from DB string to Enum
         static RelationshipTypes from_string(std::string_view text) {
             if (text == "pending")  return RelationshipTypes::pending;
             if (text == "accepted") return RelationshipTypes::accepted;
@@ -34,8 +45,8 @@ namespace pqxx {
             throw std::runtime_error("Invalid relationship status in database");
         }
 
-        static constexpr bool is_null(RelationshipTypes const &) noexcept { return false; }
-        static constexpr RelationshipTypes null() { return RelationshipTypes::pending; }
+        static constexpr bool is_null(RelationshipTypes) noexcept { return false; }
+        static constexpr bool has_null = false;
     };
 }
 
